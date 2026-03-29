@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🧟 僵尸猎人 — 向僵尸开炮</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#0a0a0a;min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  font-family:'Segoe UI',system-ui,sans-serif;color:#fff;
+  overflow:hidden;user-select:none;-webkit-user-select:none;
+}
+canvas{display:block;touch-action:none;}
+#hud{
+  position:absolute;top:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 12px;pointer-events:none;z-index:10;
+}
+.hud-box{
+  background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);
+  padding:4px 10px;border-radius:8px;font-size:13px;
+  backdrop-filter:blur(5px);pointer-events:auto;
+}
+.hval{font-weight:bold;font-size:16px;}
+.hval.gold{color:#ffd700;}.hval.red{color:#e94560;}.hval.green{color:#00ff88;}.hval.blue{color:#4d96ff;}
+#hp-bar{
+  width:120px;height:10px;background:rgba(0,0,0,0.5);border-radius:5px;
+  border:1px solid rgba(255,255,255,0.2);overflow:hidden;
+}
+#hp-fill{height:100%;background:linear-gradient(90deg,#e94560,#ff6b6b);transition:width 0.3s;border-radius:5px;}
+#wave-bar{
+  position:absolute;top:45px;left:50%;transform:translateX(-50%);
+  font-size:14px;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,0.5);
+  pointer-events:none;z-index:10;
+}
+#skills{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;z-index:10;
+}
+.skill-btn{
+  width:56px;height:56px;border-radius:14px;
+  background:rgba(30,30,50,0.8);border:2px solid rgba(255,255,255,0.2);
+  color:#fff;font-size:20px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  backdrop-filter:blur(5px);transition:all 0.2s;position:relative;
+}
+.skill-btn:active{transform:scale(0.9);}
+.skill-btn .cd{
+  position:absolute;inset:0;border-radius:12px;
+  background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:#aaa;
+}
+.skill-label{font-size:9px;margin-top:2px;color:#aaa;}
+#overlay{
+  position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.9);backdrop-filter:blur(10px);z-index:100;
+}
+#overlay.hidden{display:none;}
+#overlay h1{font-size:36px;margin-bottom:5px;}
+#overlay h2{font-size:24px;color:#e94560;margin-bottom:8px;}
+#overlay p{font-size:14px;color:#aaa;margin-bottom:15px;text-align:center;max-width:320px;line-height:1.6;}
+#go-btn{
+  padding:14px 50px;font-size:22px;font-weight:bold;
+  background:linear-gradient(135deg,#e94560,#c73e54);color:#fff;
+  border:none;border-radius:30px;cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 25px rgba(233,69,96,0.5);transition:transform 0.2s;
+}
+#go-btn:hover{transform:scale(1.05);}
+#upgrade-panel{
+  display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:15px 0;
+}
+.upg-card{
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);
+  border-radius:12px;padding:10px 14px;text-align:center;min-width:100px;cursor:pointer;
+  transition:all 0.2s;
+}
+.upg-card:hover{border-color:#ffd700;background:rgba(255,215,0,0.08);}
+.upg-card.cant{opacity:0.4;cursor:not-allowed;}
+.upg-name{font-size:12px;color:#aaa;margin-bottom:4px;}
+.upg-val{font-size:16px;font-weight:bold;color:#ffd700;}
+.upg-cost{font-size:11px;color:#e94560;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="hud-box">❤️ <div id="hp-bar"><div id="hp-fill" style="width:100%"></div></div></div>
+  <div class="hud-box">💰 <span class="hval gold" id="gold">0</span></div>
+  <div class="hud-box">🎯 波次 <span class="hval blue" id="wave">1</span></div>
+  <div class="hud-box">💀 <span class="hval red" id="kills">0</span></div>
+</div>
+<div id="wave-bar"></div>
+
+<canvas id="game"></canvas>
+
+<div id="skills">
+  <button class="skill-btn" onclick="useSkill('bomb')" id="sk-bomb">💣<div class="skill-label">全屏</div></button>
+  <button class="skill-btn" onclick="useSkill('freeze')" id="sk-freeze">❄️<div class="skill-label">冰冻</div></button>
+  <button class="skill-btn" onclick="useSkill('heal')" id="sk-heal">💚<div class="skill-label">回血</div></button>
+</div>
+
+<div id="overlay">
+  <h1>🧟 僵尸猎人</h1>
+  <h2>向僵尸开炮！</h2>
+  <p>僵尸从右侧袭来！<br>点击/拖拽瞄准射击<br>消灭僵尸获得金币，升级武器！</p>
+  <div id="upgrade-panel"></div>
+  <button id="go-btn" onclick="onGo()">🎮 开始战斗</button>
+</div>
+
+<script>
+// ===== CONFIG =====
+const C=document.getElementById('game'),X=C.getContext('2d');
+let W,H;
+function resize(){W=C.width=window.innerWidth;H=C.height=window.innerHeight-0;}
+resize();window.addEventListener('resize',resize);
+
+// ===== GAME STATE =====
+let state='menu'; // menu, playing, gameover, shop
+let hp,maxHp,gold,wave,kills,waveZombies,zombiesLeft;
+let zombies=[],bullets=[],particles=[],floats=[];
+let turret={x:80,y:0,angle:0,cd:0};
+let weapons={dmg:10,rate:15,crit:5,range:500}; // rate=frames between shots
+let skills={bomb:{cd:0,maxCd:300},freeze:{cd:0,maxCd:600,dur:0},heal:{cd:0,maxCd:300}};
+let spawnTimer=0,frozen=false,waveComplete=false,waveCompleteTimer=0;
+let savedGold=parseInt(localStorage.getItem('zhGold')||'0');
+let savedKills=parseInt(localStorage.getItem('zhKills')||'0');
+let bestWave=parseInt(localStorage.getItem('zhBestWave')||'1');
+
+// ===== ZOMBIE TYPES =====
+const ZTYPES={
+  normal:{hp:30,speed:1.2,size:18,color:'#4a7c4f',gold:5,emoji:'🧟'},
+  fast:{hp:20,speed:2.5,size:14,color:'#7cb87a',gold:8,emoji:'🏃'},
+  tank:{hp:100,speed:0.7,size:26,color:'#5c3d2e',gold:15,emoji:'🛡️'},
+  boss:{hp:300,speed:0.5,size:35,color:'#8b0000',gold:50,emoji:'👹'},
+};
+
+// ===== INIT =====
+function initGame(){
+  hp=100;maxHp=100;gold=savedGold;wave=1;kills=savedKills;
+  turret.y=H/2;turret.angle=0;turret.cd=0;
+  zombies=[];bullets=[];particles=[];floats=[];
+  skills.bomb.cd=0;skills.freeze.cd=0;skills.heal.cd=0;
+  frozen=false;spawnTimer=0;waveComplete=false;
+  startWave(1);
+}
+
+function startWave(w){
+  wave=w;
+  waveZombies=5+w*3+Math.floor(w*w*0.3);
+  zombiesLeft=waveZombies;
+  spawnTimer=0;waveComplete=false;
+  showWaveBanner('🎯 波次 '+wave);
+}
+
+// ===== ZOMBIE SPAWNING =====
+function spawnZombie(){
+  if(zombiesLeft<=0)return;
+  const r=Math.random();
+  let type='normal';
+  if(wave>=5&&r<0.1) type='boss';
+  else if(wave>=3&&r<0.25) type='tank';
+  else if(r<0.4) type='fast';
+
+  const zt=ZTYPES[type];
+  const hpScale=1+(wave-1)*0.15;
+  zombies.push({
+    x:W+20,
+    y:50+Math.random()*(H-100),
+    hp:zt.hp*hpScale, maxHp:zt.hp*hpScale,
+    speed:zt.speed*(1+Math.random()*0.3),
+    size:zt.size, color:zt.color, gold:zt.gold,
+    type, emoji:zt.emoji,
+    hitFlash:0, wobble:Math.random()*Math.PI*2
+  });
+  zombiesLeft--;
+}
+
+// ===== SHOOTING =====
+function shoot(){
+  if(turret.cd>0)return;
+  turret.cd=weapons.rate;
+
+  const angle=turret.angle;
+  const speed=12;
+  bullets.push({
+    x:turret.x+Math.cos(angle)*30,
+    y:turret.y+Math.sin(angle)*30,
+    vx:Math.cos(angle)*speed,
+    vy:Math.sin(angle)*speed,
+    dmg:weapons.dmg,
+    crit:Math.random()*100<weapons.crit,
+    life:60
+  });
+  // Muzzle flash
+  addParts(turret.x+Math.cos(angle)*30,turret.y+Math.sin(angle)*30,'#ffd700',5);
+}
+
+// ===== UPDATE =====
+function update(){
+  if(state!=='playing')return;
+
+  // Cooldowns
+  if(turret.cd>0)turret.cd--;
+  if(skills.bomb.cd>0)skills.bomb.cd--;
+  if(skills.freeze.cd>0)skills.freeze.cd--;
+  if(skills.heal.cd>0)skills.heal.cd--;
+  if(skills.freeze.dur>0){skills.freeze.dur--;if(skills.freeze.dur<=0)frozen=false;}
+
+  // Auto-shoot (hold)
+  if(isTouching||isMouseDown) shoot();
+
+  // Spawn
+  spawnTimer++;
+  const spawnRate=Math.max(20, 60-wave*2);
+  if(spawnTimer>=spawnRate&&zombiesLeft>0){spawnTimer=0;spawnZombie();}
+
+  // Wave complete check
+  if(zombiesLeft<=0&&zombies.length===0&&!waveComplete){
+    waveComplete=true;waveCompleteTimer=120;
+    gold+=wave*10;
+    showWaveBanner('✅ 波次 '+wave+' 完成！奖励 💰'+wave*10);
+  }
+  if(waveComplete){
+    waveCompleteTimer--;
+    if(waveCompleteTimer<=0){
+      if(wave>=bestWave){bestWave=wave;localStorage.setItem('zhBestWave',bestWave);}
+      showShop();
+    }
+  }
+
+  // Update zombies
+  for(let i=zombies.length-1;i>=0;i--){
+    const z=zombies[i];
+    if(z.hitFlash>0)z.hitFlash--;
+    z.wobble+=0.1;
+
+    if(!frozen){
+      z.x-=z.speed;
+      // Slight wobble
+      z.y+=Math.sin(z.wobble)*0.5;
+    }
+
+    // Reach turret
+    if(z.x<turret.x+20){
+      hp-=10;
+      addParts(z.x,z.y,'#e94560',15);
+      addFloat(z.x,z.y-20,'-10 ❤️','#e94560');
+      zombies.splice(i,1);
+      if(hp<=0){endGame();return;}
+      continue;
+    }
+    // Off screen
+    if(z.x<-50)zombies.splice(i,1);
+  }
+
+  // Update bullets
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    b.x+=b.vx;b.y+=b.vy;b.life--;
+    if(b.life<=0||b.x>W+50||b.y<-50||b.y>H+50){bullets.splice(i,1);continue;}
+
+    // Hit check
+    for(let j=zombies.length-1;j>=0;j--){
+      const z=zombies[j];
+      const dx=b.x-z.x,dy=b.y-z.y;
+      if(dx*dx+dy*dy<(z.size+5)*(z.size+5)){
+        let dmg=b.dmg;
+        if(b.crit){dmg*=2;addFloat(z.x,z.y-30,'💥 CRIT!','#ffd700');}
+        z.hp-=dmg;z.hitFlash=5;
+        addFloat(z.x,z.y-15,'-'+dmg,b.crit?'#ffd700':'#fff');
+        addParts(b.x,b.y,'#ff8',5);
+        bullets.splice(i,1);
+
+        if(z.hp<=0){
+          gold+=z.gold;kills++;
+          addParts(z.x,z.y,z.color,20);
+          addFloat(z.x,z.y-30,'+'+z.gold+' 💰','#ffd700');
+          zombies.splice(j,1);
+        }
+        break;
+      }
+    }
+  }
+
+  // Update particles & floats
+  updateParts();
+  updateFloats();
+
+  // HUD
+  document.getElementById('hp-fill').style.width=(hp/maxHp*100)+'%';
+  document.getElementById('gold').textContent=gold;
+  document.getElementById('wave').textContent=wave;
+  document.getElementById('kills').textContent=kills;
+  updateSkillBtns();
+}
+
+// ===== DRAW =====
+function draw(){
+  X.clearRect(0,0,W,H);
+
+  // BG - dark ground
+  const bg=X.createLinearGradient(0,0,W,0);
+  bg.addColorStop(0,'#1a0a0a');bg.addColorStop(0.3,'#0d1a0d');bg.addColorStop(1,'#0a0a0a');
+  X.fillStyle=bg;X.fillRect(0,0,W,H);
+
+  // Ground lines
+  X.strokeStyle='rgba(255,255,255,0.03)';X.lineWidth=1;
+  for(let y=0;y<H;y+=40){X.beginPath();X.moveTo(0,y);X.lineTo(W,y);X.stroke();}
+
+  // Frozen overlay
+  if(frozen){X.fillStyle='rgba(100,180,255,0.08)';X.fillRect(0,0,W,H);}
+
+  // Turret
+  drawTurret();
+
+  // Zombies
+  for(const z of zombies) drawZombie(z);
+
+  // Bullets
+  for(const b of bullets){
+    X.shadowColor='#ffd700';X.shadowBlur=8;
+    X.fillStyle=b.crit?'#ffd700':'#fff';
+    X.beginPath();X.arc(b.x,b.y,b.crit?5:3,0,Math.PI*2);X.fill();
+    X.shadowBlur=0;
+  }
+
+  // Particles
+  drawParts();
+
+  // Floating texts
+  drawFloats();
+
+  // Aim line
+  if(state==='playing'){
+    X.strokeStyle='rgba(255,215,0,0.15)';X.lineWidth=1;
+    X.setLineDash([5,10]);
+    X.beginPath();X.moveTo(turret.x,turret.y);
+    X.lineTo(turret.x+Math.cos(turret.angle)*300,turret.y+Math.sin(turret.angle)*300);
+    X.stroke();X.setLineDash([]);
+  }
+}
+
+function drawTurret(){
+  const tx=turret.x,ty=turret.y;
+  // Base
+  X.fillStyle='#3a3a5a';
+  X.beginPath();X.arc(tx,ty,22,0,Math.PI*2);X.fill();
+  X.fillStyle='#4a4a6a';
+  X.beginPath();X.arc(tx,ty,16,0,Math.PI*2);X.fill();
+
+  // Barrel
+  X.save();X.translate(tx,ty);X.rotate(turret.angle);
+  X.fillStyle='#5a5a7a';
+  X.fillRect(0,-5,35,10);
+  X.fillStyle='#ffd700';
+  X.fillRect(32,-3,8,6);
+  X.restore();
+
+  // Crosshair
+  X.strokeStyle='rgba(255,215,0,0.3)';X.lineWidth=1;
+  X.beginPath();X.arc(tx,ty,28,0,Math.PI*2);X.stroke();
+}
+
+function drawZombie(z){
+  const flash=z.hitFlash>0;
+  X.save();X.translate(z.x,z.y);
+
+  // Shadow
+  X.fillStyle='rgba(0,0,0,0.3)';
+  X.beginPath();X.ellipse(0,z.size*0.8,z.size*0.8,z.size*0.3,0,0,Math.PI*2);X.fill();
+
+  // Body
+  X.shadowColor=z.color;X.shadowBlur=flash?20:5;
+  X.fillStyle=flash?'#fff':z.color;
+  X.beginPath();X.arc(0,0,z.size,0,Math.PI*2);X.fill();
+  X.shadowBlur=0;
+
+  // Eyes
+  X.fillStyle='#ff0';
+  X.beginPath();X.arc(-z.size*0.3,-z.size*0.2,z.size*0.2,0,Math.PI*2);
+  X.arc(z.size*0.3,-z.size*0.2,z.size*0.2,0,Math.PI*2);X.fill();
+  X.fillStyle='#000';
+  X.beginPath();X.arc(-z.size*0.3,-z.size*0.2,z.size*0.1,0,Math.PI*2);
+  X.arc(z.size*0.3,-z.size*0.2,z.size*0.1,0,Math.PI*2);X.fill();
+
+  // Type indicator
+  if(z.type==='boss'){
+    X.fillStyle='#ff0';X.font='bold 16px sans-serif';X.textAlign='center';
+    X.fillText('👹',0,-z.size-5);
+  }
+  if(z.type==='tank'){
+    X.fillStyle='rgba(255,255,255,0.3)';X.beginPath();X.arc(0,0,z.size+3,0,Math.PI*2);X.fill();
+  }
+
+  // HP bar
+  if(z.hp<z.maxHp){
+    const bw=z.size*2,bh=4;
+    X.fillStyle='rgba(0,0,0,0.5)';X.fillRect(-bw/2,-z.size-10,bw,bh);
+    X.fillStyle=z.hp/z.maxHp>0.5?'#00ff88':z.hp/z.maxHp>0.25?'#ffd700':'#e94560';
+    X.fillRect(-bw/2,-z.size-10,bw*(z.hp/z.maxHp),bh);
+  }
+
+  X.restore();
+}
+
+// ===== INPUT =====
+let isTouching=false,isMouseDown=false,mouseX=0,mouseY=0;
+
+C.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  isTouching=true;isMouseDown=true;
+  updateAim(e.clientX,e.clientY);
+  if(state==='playing')shoot();
+});
+C.addEventListener('pointermove',e=>{
+  e.preventDefault();
+  updateAim(e.clientX,e.clientY);
+});
+C.addEventListener('pointerup',e=>{
+  isTouching=false;isMouseDown=false;
+});
+
+function updateAim(cx,cy){
+  const rect=C.getBoundingClientRect();
+  const x=cx-rect.left,y=cy-rect.top;
+  mouseX=x;mouseY=y;
+  turret.angle=Math.atan2(y-turret.y,x-turret.x);
+}
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(state==='menu'||state==='gameover'){if(e.key==='Enter'||e.key===' '){onGo();return;}}
+  if(state==='playing'){
+    switch(e.key){
+      case'1':useSkill('bomb');break;
+      case'2':useSkill('freeze');break;
+      case'3':useSkill('heal');break;
+    }
+  }
+});
+
+// ===== SKILLS =====
+function useSkill(name){
+  if(state!=='playing')return;
+  const sk=skills[name];
+  if(sk.cd>0)return;
+  switch(name){
+    case'bomb':
+      sk.cd=sk.maxCd;
+      for(const z of zombies){addParts(z.x,z.y,'#ff4444',10);gold+=2;}
+      zombies=[];
+      showWaveBanner('💣 全屏轰炸！');
+      break;
+    case'freeze':
+      sk.cd=sk.maxCd;sk.dur=180;frozen=true;
+      showWaveBanner('❄️ 僵尸冻结！');
+      break;
+    case'heal':
+      sk.cd=sk.maxCd;hp=Math.min(maxHp,hp+30);
+      showWaveBanner('💚 回复30生命！');
+      break;
+  }
+}
+
+function updateSkillBtns(){
+  for(const[name,sk]of Object.entries(skills)){
+    const btn=document.getElementById('sk-'+name);
+    const cd=btn.querySelector('.cd');
+    if(sk.cd>0){
+      if(!cd){const d=document.createElement('div');d.className='cd';btn.appendChild(d);}
+      btn.querySelector('.cd').textContent=Math.ceil(sk.cd/30)+'s';
+    }else if(cd){cd.remove();}
+  }
+}
+
+// ===== SHOP =====
+function showShop(){
+  state='shop';
+  const ol=document.getElementById('overlay');ol.classList.remove('hidden');
+  document.querySelector('#overlay h1').textContent='🏪 武器升级';
+  document.querySelector('#overlay h2').textContent='波次 '+wave+' 完成！';
+  document.querySelector('#overlay p').textContent='💰 金币: '+gold+' | 💀 击杀: '+kills;
+
+  const panel=document.getElementById('upgrade-panel');
+  panel.innerHTML='';
+  const upgs=[
+    {id:'dmg',name:'🔥 伤害',val:weapons.dmg,cost:weapons.dmg*2,key:'dmg'},
+    {id:'rate',name:'⚡ 射速',val:(30/weapons.rate).toFixed(1)+'/s',cost:(30-weapons.rate)*10,key:'rate',inv:true},
+    {id:'crit',name:'💥 暴击',val:weapons.crit+'%',cost:weapons.crit*3,key:'crit'},
+  ];
+  for(const u of upgs){
+    const canBuy=gold>=u.cost;
+    const div=document.createElement('div');
+    div.className='upg-card'+(canBuy?'':' cant');
+    div.innerHTML=`<div class="upg-name">${u.name}</div><div class="upg-val">${u.val}</div><div class="upg-cost">💰 ${u.cost}</div>`;
+    if(canBuy) div.onclick=()=>buyUpgrade(u);
+    panel.appendChild(div);
+  }
+
+  document.getElementById('go-btn').textContent='▶️ 下一波';
+}
+
+function buyUpgrade(u){
+  if(gold<u.cost)return;
+  gold-=u.cost;
+  switch(u.key){
+    case'dmg':weapons.dmg+=5;break;
+    case'rate':weapons.rate=Math.max(5,weapons.rate-1);break;
+    case'crit':weapons.crit=Math.min(50,weapons.crit+3);break;
+  }
+  localStorage.setItem('zhGold',gold);
+  showShop(); // refresh
+}
+
+function onGo(){
+  const ol=document.getElementById('overlay');ol.classList.add('hidden');
+  if(state==='menu'||state==='gameover'){
+    initGame();state='playing';
+  }else if(state==='shop'){
+    startWave(wave+1);state='playing';
+  }
+}
+
+function endGame(){
+  state='gameover';
+  localStorage.setItem('zhGold',gold);
+  localStorage.setItem('zhKills',kills);
+  const ol=document.getElementById('overlay');ol.classList.remove('hidden');
+  document.querySelector('#overlay h1').textContent='💀 游戏结束';
+  document.querySelector('#overlay h2').textContent='僵尸突破了防线！';
+  document.querySelector('#overlay p').innerHTML=`波次: ${wave} | 击杀: ${kills}<br>💰 金币: ${gold} | 🏆 最高波次: ${bestWave}`;
+  document.getElementById('upgrade-panel').innerHTML='';
+  document.getElementById('go-btn').textContent='🔄 再来一局';
+}
+
+// ===== EFFECTS =====
+function addParts(x,y,color,count){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2,sp=Math.random()*4+1;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color,size:Math.random()*4+2});
+  }
+}
+function updateParts(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;p.life-=0.03;p.size*=0.97;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+function drawParts(){
+  for(const p of particles){
+    X.globalAlpha=p.life;X.fillStyle=p.color;
+    X.beginPath();X.arc(p.x,p.y,p.size,0,Math.PI*2);X.fill();
+  }
+  X.globalAlpha=1;
+}
+function addFloat(x,y,text,color){floats.push({x,y,text,color,life:1,vy:-1.5});}
+function updateFloats(){
+  for(let i=floats.length-1;i>=0;i--){
+    const f=floats[i];f.y+=f.vy;f.life-=0.02;
+    if(f.life<=0)floats.splice(i,1);
+  }
+}
+function drawFloats(){
+  for(const f of floats){
+    X.globalAlpha=f.life;X.fillStyle=f.color;
+    X.font='bold 16px sans-serif';X.textAlign='center';
+    X.fillText(f.text,f.x,f.y);
+  }
+  X.globalAlpha=1;
+}
+function showWaveBanner(text){
+  const el=document.getElementById('wave-bar');
+  el.textContent=text;el.style.opacity=1;
+  setTimeout(()=>el.style.opacity=0,2000);
+}
+
+// ===== GAME LOOP =====
+function loop(){
+  update();draw();
+  requestAnimationFrame(loop);
+}
+
+// Init
+state='menu';
+document.querySelector('#overlay h1').textContent='🧟 僵尸猎人';
+document.querySelector('#overlay h2').textContent='向僵尸开炮！';
+document.querySelector('#overlay p').innerHTML='僵尸从右侧袭来！<br>点击/拖拽瞄准射击<br>消灭僵尸获得金币，升级武器！<br><br>🎮 点击射击 | 123 技能<br>💰 最高波次: '+bestWave;
+document.getElementById('upgrade-panel').innerHTML='';
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤖 AI 贪吃蛇</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; font-family: 'Courier New', monospace; color: #eee;
+}
+h1 { color: #0f3460; margin-bottom: 8px; font-size: 26px; }
+h1 span { color: #e94560; }
+h1 .ai { color: #00d4ff; }
+#score-board { display: flex; gap: 15px; margin-bottom: 10px; font-size: 14px; flex-wrap: wrap; justify-content: center; }
+#score-board div { background: #16213e; padding: 6px 14px; border-radius: 8px; }
+.score-val { color: #e94560; font-weight: bold; font-size: 18px; }
+.score-val.ai { color: #00d4ff; }
+canvas { border: 3px solid #0f3460; border-radius: 8px; background: #0f0f23; box-shadow: 0 0 30px rgba(0,212,255,0.2); }
+#controls { margin-top: 10px; font-size: 13px; color: #888; }
+#controls kbd { background: #16213e; padding: 2px 6px; border-radius: 4px; color: #eee; border: 1px solid #0f3460; }
+#mode-btns { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+#mode-btns button {
+  padding: 8px 18px; font-size: 14px; border: 2px solid #0f3460; background: #16213e;
+  color: #eee; border-radius: 8px; cursor: pointer; font-family: inherit;
+}
+#mode-btns button:hover { border-color: #00d4ff; }
+#mode-btns button.active { background: #0f3460; border-color: #00d4ff; color: #00d4ff; }
+#start-btn {
+  margin-top: 10px; padding: 10px 30px; font-size: 18px;
+  background: #e94560; color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; font-family: inherit; font-weight: bold;
+}
+#start-btn:hover { background: #c73e54; }
+#ai-hint {
+  margin-top: 8px; padding: 6px 14px; background: #0a1628; border-radius: 8px;
+  font-size: 13px; color: #00d4ff; min-height: 28px; text-align: center;
+}
+#mobile-controls {
+  display: none; margin-top: 10px;
+  grid-template-areas: ". up ." "left . right" ". down ."; gap: 6px;
+}
+#mobile-controls button {
+  width: 55px; height: 55px; font-size: 24px;
+  background: #16213e; color: #eee; border: 2px solid #0f3460; border-radius: 12px; cursor: pointer;
+}
+@media (pointer: coarse) { #mobile-controls { display: grid; } }
+</style>
+</head>
+<body>
+<h1>🤖 <span class="ai">AI</span> 贪吃蛇 <span>MVP</span></h1>
+
+<div id="score-board">
+  <div>你: <span class="score-val" id="score">0</span></div>
+  <div>AI: <span class="score-val ai" id="ai-score">0</span></div>
+  <div>步数: <span id="steps">0</span></div>
+</div>
+
+<div id="mode-btns">
+  <button onclick="setMode('player')" id="btn-player" class="active">🎮 人玩</button>
+  <button onclick="setMode('ai')" id="btn-ai">🤖 AI自动</button>
+  <button onclick="setMode('versus')" id="btn-versus">⚔️ 人机对战</button>
+  <button onclick="setMode('coach')" id="btn-coach">💡 AI教练</button>
+</div>
+
+<div style="position:relative;">
+  <canvas id="game" width="400" height="400"></canvas>
+</div>
+
+<div id="ai-hint">选择模式，开始游戏</div>
+
+<div id="controls">
+  移动: <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> | 暂停: <kbd>Space</kbd> | 重开: <kbd>R</kbd>
+</div>
+<button id="start-btn" onclick="startGame()">🎮 开始游戏</button>
+
+<div id="mobile-controls">
+  <button onclick="setDir(0,-1)" style="grid-area:up">▲</button>
+  <button onclick="setDir(-1,0)" style="grid-area:left">◀</button>
+  <button onclick="setDir(1,0)" style="grid-area:right">▶</button>
+  <button onclick="setDir(0,1)" style="grid-area:down">▼</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const GRID = 20;
+const COLS = canvas.width / GRID;
+const ROWS = canvas.height / GRID;
+
+let snake, aiSnake, dir, nextDir, aiDir, food, score, aiScore, steps;
+let best = 0, gameLoop, paused, started, speed;
+let mode = 'player'; // player, ai, versus, coach
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('#mode-btns button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + m).classList.add('active');
+  if (started) { clearInterval(gameLoop); startGame(); }
+}
+
+function init() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  aiSnake = [{x:10,y:5},{x:9,y:5},{x:8,y:5}];
+  dir = {x:1,y:0}; nextDir = {x:1,y:0}; aiDir = {x:1,y:0};
+  score = 0; aiScore = 0; steps = 0; paused = false; started = false; speed = 130;
+  spawnFood();
+  document.getElementById('score').textContent = '0';
+  document.getElementById('ai-score').textContent = '0';
+  document.getElementById('steps').textContent = '0';
+  document.getElementById('ai-hint').textContent = '选择模式，开始游戏';
+  draw();
+}
+
+function spawnFood() {
+  let pos;
+  const occupied = [...snake, ...(mode==='versus'?aiSnake:[])];
+  do {
+    pos = { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
+  } while (occupied.some(s => s.x===pos.x && s.y===pos.y));
+  food = pos;
+}
+
+// ========== A* PATHFINDING ==========
+function heuristic(a, b) { return Math.abs(a.x-b.x) + Math.abs(a.y-b.y); }
+
+function getNeighbors(node) {
+  const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+  return dirs.map(d => ({x:node.x+d.x, y:node.y+d.y}))
+    .filter(n => n.x>=0 && n.x<COLS && n.y>=0 && n.y<ROWS);
+}
+
+function isBlocked(pos, body, extraBodies=[]) {
+  return body.some(s=>s.x===pos.x&&s.y===pos.y) || extraBodies.some(b=>b.some(s=>s.x===pos.x&&s.y===pos.y));
+}
+
+function findPath(start, target, body, extraBodies=[]) {
+  const openSet = [{...start, g:0, f:heuristic(start,target), parent:null}];
+  const closedSet = new Set();
+  
+  while (openSet.length > 0) {
+    openSet.sort((a,b) => a.f - b.f);
+    const current = openSet.shift();
+    const key = `${current.x},${current.y}`;
+    
+    if (current.x===target.x && current.y===target.y) {
+      const path = [];
+      let node = current;
+      while (node.parent) { path.unshift({x:node.x,y:node.y}); node = node.parent; }
+      return path;
+    }
+    
+    if (closedSet.has(key)) continue;
+    closedSet.add(key);
+    
+    for (const nb of getNeighbors(current)) {
+      const nk = `${nb.x},${nb.y}`;
+      if (closedSet.has(nk)) continue;
+      // Allow passing through tail (it will move)
+      const bodyWithoutTail = body.slice(0, -1);
+      if (isBlocked(nb, bodyWithoutTail, extraBodies)) continue;
+      
+      const g = current.g + 1;
+      const existing = openSet.find(n => n.x===nb.x && n.y===nb.y);
+      if (!existing || g < existing.g) {
+        if (existing) { existing.g = g; existing.f = g + heuristic(nb,target); existing.parent = current; }
+        else openSet.push({...nb, g, f:g+heuristic(nb,target), parent:current});
+      }
+    }
+  }
+  return null; // No path found
+}
+
+// Fallback: find safe direction if no path to food
+function getSafeDir(head, body, target) {
+  const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+  // Score each direction
+  let bestDir = dirs[0], bestScore = -Infinity;
+  
+  for (const d of dirs) {
+    const next = {x:head.x+d.x, y:head.y+d.y};
+    if (next.x<0||next.x>=COLS||next.y<0||next.y>=ROWS) continue;
+    if (body.slice(0,-1).some(s=>s.x===next.x&&s.y===next.y)) continue;
+    
+    // Flood fill to measure open space
+    let space = floodFill(next, body.slice(0,-1));
+    let score = space * 10;
+    if (target) score -= heuristic(next, target);
+    if (score > bestScore) { bestScore = score; bestDir = d; }
+  }
+  return bestDir;
+}
+
+function floodFill(start, blocked) {
+  const visited = new Set();
+  const queue = [start];
+  let count = 0;
+  while (queue.length > 0 && count < COLS*ROWS) {
+    const n = queue.shift();
+    const k = `${n.x},${n.y}`;
+    if (visited.has(k)) continue;
+    if (n.x<0||n.x>=COLS||n.y<0||n.y>=ROWS) continue;
+    if (blocked.some(s=>s.x===n.x&&s.y===n.y)) continue;
+    visited.add(k); count++;
+    for (const nb of getNeighbors(n)) queue.push(nb);
+  }
+  return count;
+}
+
+function aiGetDirection(snakeBody) {
+  const head = snakeBody[0];
+  const extraBodies = mode==='versus' ? [snake] : [];
+  
+  // Try A* to food
+  let path = findPath(head, food, snakeBody, extraBodies);
+  
+  if (path && path.length > 0) {
+    const next = path[0];
+    // Check if it's actually safe (flood fill check)
+    const nextBody = [{...next}, ...snakeBody.slice(0,-1)];
+    const space = floodFill(next, nextBody);
+    if (space >= snakeBody.length) {
+      return {x: next.x-head.x, y: next.y-head.y};
+    }
+  }
+  
+  // Fallback: find safe direction
+  return getSafeDir(head, snakeBody, food);
+}
+
+// ========== DRAWING ==========
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  // Grid
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for(let x=0;x<COLS;x++) for(let y=0;y<ROWS;y++) ctx.fillRect(x*GRID+9,y*GRID+9,2,2);
+  
+  // Draw snake (player)
+  const showPlayer = mode !== 'ai';
+  const showAI = mode === 'ai' || mode === 'versus';
+  
+  if (showPlayer) {
+    snake.forEach((seg,i) => {
+      const ratio = 1 - i/snake.length;
+      ctx.fillStyle = `hsl(${160+ratio*40},80%,${40+ratio*25}%)`;
+      ctx.shadowColor = '#00ff88'; ctx.shadowBlur = i===0?12:4;
+      drawRound(seg.x, seg.y, 5); ctx.shadowBlur = 0;
+    });
+  }
+  
+  // Draw AI snake
+  if (showAI) {
+    aiSnake.forEach((seg,i) => {
+      const ratio = 1 - i/aiSnake.length;
+      ctx.fillStyle = `hsl(${200+ratio*20},90%,${40+ratio*25}%)`;
+      ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = i===0?12:4;
+      drawRound(seg.x, seg.y, 5); ctx.shadowBlur = 0;
+      // AI label on head
+      if (i===0) {
+        ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('AI', seg.x*GRID+GRID/2, seg.y*GRID+GRID/2+3);
+      }
+    });
+  }
+  
+  // Food
+  ctx.shadowColor = '#e94560'; ctx.shadowBlur = 15; ctx.fillStyle = '#e94560';
+  ctx.beginPath(); ctx.arc(food.x*GRID+GRID/2, food.y*GRID+GRID/2, GRID/2-2, 0, Math.PI*2);
+  ctx.fill(); ctx.shadowBlur = 0;
+  
+  // AI hint arrow (coach mode)
+  if (mode === 'coach' && started && !paused) {
+    const hintDir = aiGetDirection(snake);
+    const hx = snake[0].x*GRID+GRID/2;
+    const hy = snake[0].y*GRID+GRID/2;
+    ctx.strokeStyle = 'rgba(0,212,255,0.6)'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx + hintDir.x*GRID*1.5, hy + hintDir.y*GRID*1.5);
+    ctx.stroke();
+    // Arrowhead
+    const ax = hx + hintDir.x*GRID*1.5;
+    const ay = hy + hintDir.y*GRID*1.5;
+    ctx.fillStyle = 'rgba(0,212,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(ax, ay, 5, 0, Math.PI*2); ctx.fill();
+  }
+  
+  // Pause overlay
+  if (paused && started) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#fff'; ctx.font = '36px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('⏸ 暂停', canvas.width/2, canvas.height/2);
+  }
+}
+
+function drawRound(gx, gy, r) {
+  const x = gx*GRID+1, y = gy*GRID+1, w = GRID-2, h = GRID-2;
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.fill();
+}
+
+// ========== GAME LOGIC ==========
+function moveSnake(body, d) {
+  const head = {x: body[0].x+d.x, y: body[0].y+d.y};
+  return {head, body: [head, ...body.slice(0,-1)]};
+}
+
+function checkCollision(head, body, otherBody=null) {
+  if (head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS) return true;
+  if (body.slice(1).some(s=>s.x===head.x&&s.y===head.y)) return true;
+  if (otherBody && otherBody.some(s=>s.x===head.x&&s.y===head.y)) return true;
+  return false;
+}
+
+function update() {
+  if (paused) return;
+  steps++;
+  document.getElementById('steps').textContent = steps;
+  
+  const showPlayer = mode !== 'ai';
+  const showAI = mode === 'ai' || mode === 'versus';
+  
+  // Player move
+  if (showPlayer) {
+    dir = {...nextDir};
+    const result = moveSnake(snake, dir);
+    
+    // Check collision with AI snake in versus mode
+    const otherBody = showAI ? aiSnake : null;
+    if (checkCollision(result.head, result.body, otherBody)) return gameOver('你');
+    
+    snake = result.body;
+    
+    if (result.head.x===food.x && result.head.y===food.y) {
+      score++;
+      document.getElementById('score').textContent = score;
+      snake.push({...snake[snake.length-1]});
+      spawnFood();
+    }
+    
+    // AI coach hint
+    if (mode === 'coach') {
+      const hintDir = aiGetDirection(snake);
+      const dirs = [{x:0,y:-1,l:'↑'},{x:0,y:1,l:'↓'},{x:-1,y:0,l:'←'},{x:1,y:0,l:'→'}];
+      const best = dirs.find(d=>d.x===hintDir.x&&d.y===hintDir.y);
+      const cur = dirs.find(d=>d.x===dir.x&&d.y===dir.y);
+      const isGood = best && cur && best.l === cur.l;
+      document.getElementById('ai-hint').innerHTML = 
+        `💡 AI建议: <b style="color:${isGood?'#00ff88':'#e94560'}">${best?best.l:'?'}</b> ${isGood?'✅ 走得好！':'⚠️ 建议换方向'}`;
+    }
+  }
+  
+  // AI move
+  if (showAI) {
+    aiDir = aiGetDirection(aiSnake);
+    const result = moveSnake(aiSnake, aiDir);
+    
+    const otherBody = showPlayer ? snake : null;
+    if (checkCollision(result.head, result.body, otherBody)) {
+      if (mode === 'ai') return gameOver('AI');
+      else {
+        // AI died in versus - respawn
+        aiSnake = [{x:5,y:5},{x:4,y:5},{x:3,y:5}];
+        aiDir = {x:1,y:0};
+      }
+    } else {
+      aiSnake = result.body;
+      if (result.head.x===food.x && result.head.y===food.y) {
+        aiScore++;
+        document.getElementById('ai-score').textContent = aiScore;
+        aiSnake.push({...aiSnake[aiSnake.length-1]});
+        spawnFood();
+      }
+    }
+  }
+  
+  draw();
+}
+
+function gameOver(who) {
+  clearInterval(gameLoop); started = false; draw();
+  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#e94560'; ctx.font='28px monospace'; ctx.textAlign='center';
+  ctx.fillText(`💀 ${who} Game Over!`, canvas.width/2, canvas.height/2-15);
+  ctx.fillStyle='#fff'; ctx.font='18px monospace';
+  ctx.fillText(`你:${score}  AI:${aiScore}  步数:${steps}`, canvas.width/2, canvas.height/2+20);
+  document.getElementById('start-btn').textContent='🔄 重新开始';
+}
+
+function startGame() {
+  init(); started = true;
+  document.getElementById('start-btn').textContent='🎮 游戏中...';
+  if (mode === 'ai') speed = 80;
+  else if (mode === 'versus') speed = 110;
+  else speed = 130;
+  gameLoop = setInterval(update, speed);
+}
+
+function setDir(x,y) {
+  if (dir.x+x===0 && dir.y+y===0) return;
+  nextDir = {x,y};
+}
+
+document.addEventListener('keydown', e => {
+  if (!started && (e.key==='Enter'||e.key===' ')) { startGame(); return; }
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W': setDir(0,-1); break;
+    case 'ArrowDown': case 's': case 'S': setDir(0,1); break;
+    case 'ArrowLeft': case 'a': case 'A': setDir(-1,0); break;
+    case 'ArrowRight': case 'd': case 'D': setDir(1,0); break;
+    case ' ': paused=!paused; draw(); break;
+    case 'r': case 'R': if(started){clearInterval(gameLoop);startGame();} break;
+  } e.preventDefault();
+});
+
+init();
+</script>
+</body>
+</html>

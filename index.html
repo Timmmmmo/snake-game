@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎮 DT小龙虾游戏大厅</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:linear-gradient(135deg,#0a0a1a,#1a1a3e,#0a1628);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  font-family:'Segoe UI',system-ui,sans-serif;color:#e0e0e0;padding:20px;
+}
+h1{
+  font-size:32px;margin:20px 0 8px;letter-spacing:3px;
+  background:linear-gradient(90deg,#00d4ff,#e94560,#ffd700,#00ff88);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.subtitle{color:#888;font-size:14px;margin-bottom:25px;}
+.games{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;max-width:800px;width:100%;}
+.card{
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);
+  border-radius:16px;padding:20px;transition:all 0.3s;cursor:pointer;
+  text-decoration:none;color:inherit;display:block;
+}
+.card:hover{
+  border-color:rgba(0,212,255,0.4);background:rgba(0,212,255,0.05);
+  transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,212,255,0.15);
+}
+.card-emoji{font-size:40px;margin-bottom:10px;}
+.card-title{font-size:20px;font-weight:bold;margin-bottom:6px;}
+.card-desc{font-size:13px;color:#888;line-height:1.5;}
+.card-tag{
+  display:inline-block;margin-top:8px;padding:2px 10px;
+  background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);
+  border-radius:12px;font-size:11px;color:#00d4ff;
+}
+.footer{margin-top:40px;color:#555;font-size:12px;text-align:center;}
+</style>
+</head>
+<body>
+
+<h1>🎮 DT小龙虾游戏大厅</h1>
+<p class="subtitle">AI开发的游戏合集 — 持续更新中</p>
+
+<div class="games">
+
+<a class="card" href="zombie-hunter.html">
+  <div class="card-emoji">🧟</div>
+  <div class="card-title">僵尸猎人</div>
+  <div class="card-desc">向僵尸开炮复刻版！炮塔射击僵尸，升级武器，挑战波次！</div>
+  <span class="card-tag">🔥 最新</span>
+</a>
+
+<a class="card" href="dice-merge.html">
+  <div class="card-emoji">🎲</div>
+  <div class="card-title">骰子总动员</div>
+  <div class="card-desc">骰子合并游戏，相同点数碰撞合并，挑战最高分！</div>
+  <span class="card-tag">热门</span>
+</a>
+
+<a class="card" href="snake-energy.html">
+  <div class="card-emoji">💎</div>
+  <div class="card-title">能量贪吃蛇</div>
+  <div class="card-desc">三消×贪吃蛇缝合怪！三消除充能驱动贪吃蛇AI霸屏！</div>
+  <span class="card-tag">创新</span>
+</a>
+
+<a class="card" href="snake-ultimate.html">
+  <div class="card-emoji">🤖</div>
+  <div class="card-title">AI贪吃蛇终极版</div>
+  <div class="card-desc">5种模式！经典/AI表演/人机对战/AI教练/挑战模式</div>
+  <span class="card-tag">AI</span>
+</a>
+
+<a class="card" href="snake-ai-mvp.html">
+  <div class="card-emoji">🐍</div>
+  <div class="card-title">AI贪吃蛇</div>
+  <div class="card-desc">A*寻路人机对战，路径可视化</div>
+</a>
+
+<a class="card" href="snake-mvp.html">
+  <div class="card-emoji">🟢</div>
+  <div class="card-title">贪吃蛇MVP</div>
+  <div class="card-desc">经典贪吃蛇，简单好玩</div>
+</a>
+
+</div>
+
+<div class="footer">
+  由 DT小龙虾🦞 AI助手开发 | 持续更新中
+</div>
+
+</body>
+</html>

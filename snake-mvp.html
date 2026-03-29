@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐍 贪吃蛇 MVP</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Courier New', monospace;
+  color: #eee;
+}
+h1 { color: #0f3460; margin-bottom: 10px; font-size: 28px; }
+h1 span { color: #e94560; }
+#score-board {
+  display: flex; gap: 40px; margin-bottom: 15px; font-size: 18px;
+}
+#score-board div { background: #16213e; padding: 8px 20px; border-radius: 8px; }
+.score-val { color: #e94560; font-weight: bold; font-size: 22px; }
+canvas {
+  border: 3px solid #0f3460;
+  border-radius: 8px;
+  background: #0f0f23;
+  box-shadow: 0 0 30px rgba(233,69,96,0.3);
+}
+#controls {
+  margin-top: 15px; font-size: 14px; color: #888;
+}
+#controls kbd {
+  background: #16213e; padding: 2px 8px; border-radius: 4px; color: #eee;
+  border: 1px solid #0f3460;
+}
+#start-btn {
+  margin-top: 15px; padding: 12px 40px; font-size: 20px;
+  background: #e94560; color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; font-family: inherit; font-weight: bold;
+}
+#start-btn:hover { background: #c73e54; }
+#overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+#msg { font-size: 36px; color: #e94560; font-weight: bold; margin-bottom: 10px; }
+#mobile-controls {
+  display: none; margin-top: 15px;
+  grid-template-areas:
+    ". up ."
+    "left . right"
+    ". down .";
+  gap: 8px;
+}
+#mobile-controls button {
+  width: 60px; height: 60px; font-size: 28px;
+  background: #16213e; color: #eee; border: 2px solid #0f3460;
+  border-radius: 12px; cursor: pointer;
+}
+@media (pointer: coarse) { #mobile-controls { display: grid; } }
+</style>
+</head>
+<body>
+
+<h1>🐍 <span>贪吃蛇</span> MVP</h1>
+<div id="score-board">
+  <div>得分: <span class="score-val" id="score">0</span></div>
+  <div>最高: <span class="score-val" id="best">0</span></div>
+</div>
+
+<div style="position:relative;">
+  <canvas id="game" width="400" height="400"></canvas>
+  <div id="overlay"><div id="msg"></div></div>
+</div>
+
+<div id="controls">
+  移动: <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> &nbsp;|&nbsp;
+  暂停: <kbd>Space</kbd> &nbsp;|&nbsp; 重开: <kbd>R</kbd>
+</div>
+<button id="start-btn" onclick="startGame()">🎮 开始游戏</button>
+
+<div id="mobile-controls">
+  <button onclick="setDir(0,-1)" style="grid-area:up">▲</button>
+  <button onclick="setDir(-1,0)" style="grid-area:left">◀</button>
+  <button onclick="setDir(1,0)" style="grid-area:right">▶</button>
+  <button onclick="setDir(0,1)" style="grid-area:down">▼</button>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const GRID = 20;
+const COLS = canvas.width / GRID;
+const ROWS = canvas.height / GRID;
+
+let snake, dir, nextDir, food, score, best = 0, gameLoop, paused, started, speed;
+
+function init() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  nextDir = {x:1,y:0};
+  score = 0;
+  paused = false;
+  started = false;
+  speed = 150;
+  spawnFood();
+  document.getElementById('score').textContent = '0';
+  document.getElementById('msg').textContent = '';
+  draw();
+}
+
+function spawnFood() {
+  let pos;
+  do {
+    pos = { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
+  } while (snake.some(s => s.x===pos.x && s.y===pos.y));
+  food = pos;
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // grid dots
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for(let x=0;x<COLS;x++) for(let y=0;y<ROWS;y++) {
+    ctx.fillRect(x*GRID+9,y*GRID+9,2,2);
+  }
+
+  // snake
+  snake.forEach((seg,i) => {
+    const ratio = 1 - i / snake.length;
+    ctx.fillStyle = `hsl(${160 + ratio*40}, 80%, ${40 + ratio*25}%)`;
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur = i===0 ? 12 : 4;
+    roundRect(seg.x*GRID+1, seg.y*GRID+1, GRID-2, GRID-2, 5);
+    ctx.shadowBlur = 0;
+  });
+
+  // food
+  ctx.shadowColor = '#e94560';
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = '#e94560';
+  ctx.beginPath();
+  ctx.arc(food.x*GRID+GRID/2, food.y*GRID+GRID/2, GRID/2-2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // pause overlay
+  if (paused && started) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.font = '36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('⏸ 暂停', canvas.width/2, canvas.height/2);
+  }
+}
+
+function roundRect(x,y,w,h,r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.fill();
+}
+
+function update() {
+  if (paused) return;
+  dir = {...nextDir};
+  const head = {x: snake[0].x+dir.x, y: snake[0].y+dir.y};
+
+  // wall collision
+  if (head.x<0 || head.x>=COLS || head.y<0 || head.y>=ROWS) return gameOver();
+  // self collision
+  if (snake.some(s => s.x===head.x && s.y===head.y)) return gameOver();
+
+  snake.unshift(head);
+
+  if (head.x===food.x && head.y===food.y) {
+    score++;
+    document.getElementById('score').textContent = score;
+    if (score > best) { best = score; document.getElementById('best').textContent = best; }
+    spawnFood();
+    // speed up slightly
+    if (speed > 60) { speed -= 2; clearInterval(gameLoop); gameLoop = setInterval(gameStep, speed); }
+  } else {
+    snake.pop();
+  }
+
+  draw();
+}
+
+function gameStep() { update(); }
+
+function gameOver() {
+  clearInterval(gameLoop);
+  started = false;
+  draw();
+  const msg = document.getElementById('msg');
+  msg.textContent = `💀 Game Over! 得分: ${score}`;
+  document.getElementById('start-btn').textContent = '🔄 重新开始';
+}
+
+function startGame() {
+  init();
+  started = true;
+  document.getElementById('start-btn').textContent = '🎮 游戏中...';
+  gameLoop = setInterval(gameStep, speed);
+}
+
+function setDir(x,y) {
+  // prevent 180 turn
+  if (dir.x + x === 0 && dir.y + y === 0) return;
+  nextDir = {x,y};
+}
+
+document.addEventListener('keydown', e => {
+  if (!started && (e.key==='Enter'||e.key===' ')) { startGame(); return; }
+  switch(e.key) {
+    case 'ArrowUp':    case 'w': case 'W': setDir(0,-1); break;
+    case 'ArrowDown':  case 's': case 'S': setDir(0,1); break;
+    case 'ArrowLeft':  case 'a': case 'A': setDir(-1,0); break;
+    case 'ArrowRight': case 'd': case 'D': setDir(1,0); break;
+    case ' ': paused = !paused; draw(); break;
+    case 'r': case 'R': if(started) { clearInterval(gameLoop); startGame(); } break;
+  }
+  e.preventDefault();
+});
+
+init();
+</script>
+</body>
+</html>

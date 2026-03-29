@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🐍 能量贪吃蛇 — 三消×蛇</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:linear-gradient(135deg,#0a0a1a,#1a1a3e,#0a1628);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  font-family:'Segoe UI',system-ui,sans-serif;color:#e0e0e0;
+  overflow:hidden;user-select:none;
+}
+h1{
+  font-size:22px;margin:8px 0 4px;letter-spacing:2px;
+  background:linear-gradient(90deg,#00d4ff,#e94560,#ffd700);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#hud{
+  display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;
+  margin-bottom:6px;font-size:13px;
+}
+.hbox{
+  background:rgba(15,52,96,0.5);border:1px solid rgba(0,212,255,0.2);
+  padding:4px 10px;border-radius:8px;backdrop-filter:blur(5px);
+}
+.hval{font-weight:bold;font-size:16px;}
+.hval.g{color:#00ff88;}.hval.b{color:#00d4ff;}.hval.y{color:#ffd700;}.hval.r{color:#e94560;}
+#energy-bar{
+  width:200px;height:14px;background:rgba(0,0,0,0.4);border-radius:7px;
+  border:1px solid rgba(0,212,255,0.3);overflow:hidden;position:relative;
+}
+#energy-fill{
+  height:100%;width:0%;border-radius:7px;transition:width 0.3s;
+  background:linear-gradient(90deg,#00d4ff,#00ff88);
+  box-shadow:0 0 10px rgba(0,212,255,0.5);
+}
+#energy-label{
+  position:absolute;top:0;left:0;right:0;text-align:center;
+  font-size:10px;line-height:14px;color:#fff;text-shadow:0 0 3px #000;
+}
+#main{
+  display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;justify-content:center;
+}
+.panel{
+  background:rgba(10,22,40,0.8);border:1px solid rgba(0,212,255,0.15);
+  border-radius:12px;padding:8px;backdrop-filter:blur(10px);
+  box-shadow:0 0 30px rgba(0,212,255,0.08);
+}
+.panel-title{
+  text-align:center;font-size:12px;color:#888;margin-bottom:4px;
+  letter-spacing:1px;
+}
+canvas{display:block;border-radius:8px;}
+#overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:100;
+}
+#overlay.hidden{display:none;}
+#overlay h2{font-size:36px;margin-bottom:8px;}
+#overlay p{font-size:16px;color:#aaa;margin-bottom:16px;max-width:400px;text-align:center;}
+#go-btn{
+  padding:14px 40px;font-size:20px;font-weight:bold;
+  background:linear-gradient(135deg,#e94560,#c73e54);color:#fff;
+  border:none;border-radius:30px;cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 20px rgba(233,69,96,0.4);transition:transform 0.2s;
+}
+#go-btn:hover{transform:scale(1.05);}
+#msg{
+  margin-top:6px;font-size:12px;color:#00d4ff;min-height:18px;text-align:center;
+}
+#controls-hint{margin-top:6px;font-size:11px;color:#555;text-align:center;}
+#mobile-dpad{
+  display:none;margin-top:8px;
+  grid-template-areas:". u ." "l . r" ". d .";gap:6px;
+}
+#mobile-dpad button{
+  width:50px;height:50px;font-size:20px;
+  background:rgba(15,52,96,0.6);color:#00d4ff;
+  border:1px solid rgba(0,212,255,0.3);border-radius:12px;cursor:pointer;
+}
+@media(pointer:coarse){#mobile-dpad{display:grid;}}
+@media(max-width:700px){
+  #main{flex-direction:column;align-items:center;}
+  canvas{width:100%!important;height:auto!important;}
+}
+</style>
+</head>
+<body>
+
+<h1>🐍 能量贪吃蛇</h1>
+
+<div id="hud">
+  <div class="hbox">🟢 蛇长: <span class="hval g" id="snake-len">3</span></div>
+  <div class="hbox">💎 消除: <span class="hval b" id="match-cnt">0</span></div>
+  <div class="hbox">🏆 最长: <span class="hval y" id="best-len">3</span></div>
+  <div class="hbox">
+    ⚡ 能量:
+    <div id="energy-bar"><div id="energy-fill"></div><div id="energy-label">0 / 100</div></div>
+  </div>
+</div>
+
+<div id="main">
+  <div class="panel">
+    <div class="panel-title">💎 三消 — 滑动交换消除充能</div>
+    <canvas id="match-canvas" width="280" height="280"></canvas>
+  </div>
+  <div class="panel">
+    <div class="panel-title">🐍 贪吃蛇 — 能量驱动霸屏</div>
+    <canvas id="snake-canvas" width="280" height="280"></canvas>
+  </div>
+</div>
+
+<div id="msg"></div>
+<div id="controls-hint">
+  三消: 点击相邻宝石交换 | 蛇: ⬆️⬇️⬅️➡️ 方向键 | 空格: AI自动(消耗能量) | R: 重开
+</div>
+
+<div id="mobile-dpad">
+  <button onclick="sDir(0,-1)" style="grid-area:u">▲</button>
+  <button onclick="sDir(-1,0)" style="grid-area:l">◀</button>
+  <button onclick="sDir(1,0)" style="grid-area:r">▶</button>
+  <button onclick="sDir(0,1)" style="grid-area:d">▼</button>
+</div>
+
+<div id="overlay">
+  <h2 id="ol-title">🐍 能量贪吃蛇</h2>
+  <p id="ol-desc">三消消除 → 获得能量 → 驱动贪吃蛇霸屏！</p>
+  <button id="go-btn" onclick="startGame()">🎮 开始游戏</button>
+</div>
+
+<script>
+// ========== CONFIG ==========
+const MC=document.getElementById('match-canvas'), MX=MC.getContext('2d');
+const SC=document.getElementById('snake-canvas'), SX=SC.getContext('2d');
+const GEM_SIZE=40, GRID_N=7, SGRID=20, SCOLS=SC.width/SGRID, SROWS=SC.height/SGRID;
+const GEM_COLORS=['#e94560','#00d4ff','#00ff88','#ffd700','#a855f7'];
+const GEM_EMOJI=['🔴','🔵','🟢','🟡','🟣'];
+const MAX_ENERGY=100, AI_COST=2, MOVE_COST=1;
+
+// ========== STATE ==========
+let board=[], selectedGem=null, matchCount=0, energy=0;
+let snake, dir, nextDir, food, snakeLen, bestLen=3;
+let started=false, paused=false, aiMode=false, gameOverFlag=false;
+let gameLoop, particles=[], combo=0, isAnimating=false;
+
+// ========== OVERLAY ==========
+function showOverlay(title,desc,btn){
+  const o=document.getElementById('overlay'); o.classList.remove('hidden');
+  document.getElementById('ol-title').textContent=title;
+  document.getElementById('ol-desc').textContent=desc;
+  document.getElementById('go-btn').textContent=btn;
+}
+function hideOverlay(){document.getElementById('overlay').classList.add('hidden');}
+
+function startGame(){
+  initMatch3(); initSnake();
+  started=true; paused=false; gameOverFlag=false; energy=0; matchCount=0; combo=0;
+  updateHUD(); hideOverlay();
+  clearInterval(gameLoop);
+  gameLoop=setInterval(gameTick, 120);
+}
+
+// ========== MATCH-3 ENGINE ==========
+function initMatch3(){
+  board=[];
+  for(let r=0;r<GRID_N;r++){
+    board[r]=[];
+    for(let c=0;c<GRID_N;c++){
+      let color;
+      do{color=Math.floor(Math.random()*GEM_COLORS.length);}
+      while((c>=2&&board[r][c-1]===color&&board[r][c-2]===color)||
+            (r>=2&&board[r-1]&&board[r-1][c]===color&&board[r-2]&&board[r-2][c]===color));
+      board[r][c]=color;
+    }
+  }
+}
+
+function drawMatch3(){
+  MX.clearRect(0,0,MC.width,MC.height);
+  // BG
+  MX.fillStyle='rgba(5,15,30,0.9)'; MX.fillRect(0,0,MC.width,MC.height);
+  // Grid lines
+  MX.strokeStyle='rgba(255,255,255,0.05)'; MX.lineWidth=1;
+  for(let i=0;i<=GRID_N;i++){
+    MX.beginPath();MX.moveTo(i*GEM_SIZE,0);MX.lineTo(i*GEM_SIZE,GRID_N*GEM_SIZE);MX.stroke();
+    MX.beginPath();MX.moveTo(0,i*GEM_SIZE);MX.lineTo(GRID_N*GEM_SIZE,i*GEM_SIZE);MX.stroke();
+  }
+  // Gems
+  for(let r=0;r<GRID_N;r++){
+    for(let c=0;c<GRID_N;c++){
+      if(board[r][c]===-1) continue;
+      const x=c*GEM_SIZE+GEM_SIZE/2, y=r*GEM_SIZE+GEM_SIZE/2;
+      const color=GEM_COLORS[board[r][c]];
+      // Glow
+      MX.shadowColor=color; MX.shadowBlur=8;
+      // Gem body
+      MX.fillStyle=color;
+      MX.beginPath();
+      // Rounded square
+      const s=GEM_SIZE*0.35, rad=8;
+      const lx=x-s, ly=y-s, w=s*2, h=s*2;
+      MX.moveTo(lx+rad,ly); MX.arcTo(lx+w,ly,lx+w,ly+h,rad);
+      MX.arcTo(lx+w,ly+h,lx,ly+h,rad); MX.arcTo(lx,ly+h,lx,ly,rad);
+      MX.arcTo(lx,ly,lx+w,ly,rad); MX.fill();
+      MX.shadowBlur=0;
+      // Highlight
+      MX.fillStyle='rgba(255,255,255,0.3)';
+      MX.beginPath(); MX.arc(x-s*0.3,y-s*0.3,s*0.3,0,Math.PI*2); MX.fill();
+      // Selected ring
+      if(selectedGem&&selectedGem.r===r&&selectedGem.c===c){
+        MX.strokeStyle='#fff'; MX.lineWidth=3;
+        MX.beginPath(); MX.arc(x,y,GEM_SIZE*0.42,0,Math.PI*2); MX.stroke();
+      }
+    }
+  }
+  // Match particles
+  drawParticles(MX, GEM_SIZE);
+}
+
+// ========== MATCH-3 INTERACTION ==========
+let dragStart=null;
+MC.addEventListener('pointerdown',e=>{
+  if(!started||isAnimating) return;
+  const rect=MC.getBoundingClientRect();
+  const sx=MC.width/rect.width, sy=MC.height/rect.height;
+  const c=Math.floor((e.clientX-rect.left)*sx/GEM_SIZE);
+  const r=Math.floor((e.clientY-rect.top)*sy/GEM_SIZE);
+  if(r<0||r>=GRID_N||c<0||c>=GRID_N||board[r][c]===-1) return;
+  dragStart={r,c};
+});
+MC.addEventListener('pointerup',e=>{
+  if(!dragStart||!started||isAnimating) return;
+  const rect=MC.getBoundingClientRect();
+  const sx=MC.width/rect.width, sy=MC.height/rect.height;
+  const c=Math.floor((e.clientX-rect.left)*sx/GEM_SIZE);
+  const r=Math.floor((e.clientY-rect.top)*sy/GEM_SIZE);
+  const dr=r-dragStart.r, dc=c-dragStart.c;
+  if(Math.abs(dr)+Math.abs(dc)===1){
+    trySwap(dragStart.r,dragStart.c,r,c);
+  } else if(r===dragStart.r&&c===dragStart.c){
+    // Click - select or swap with selected
+    if(selectedGem){
+      const sr=selectedGem.r, sc=selectedGem.c;
+      if(Math.abs(sr-r)+Math.abs(sc-c)===1){
+        trySwap(sr,sc,r,c); selectedGem=null;
+      } else {
+        selectedGem={r,c};
+      }
+    } else { selectedGem={r,c}; }
+  }
+  dragStart=null;
+});
+
+async function trySwap(r1,c1,r2,c2){
+  if(isAnimating) return;
+  isAnimating=true;
+  // Swap
+  [board[r1][c1],board[r2][c2]]=[board[r2][c2],board[r1][c1]];
+  drawMatch3();
+  // Check matches
+  const matches=findMatches();
+  if(matches.length===0){
+    // Swap back
+    [board[r1][c1],board[r2][c2]]=[board[r2][c2],board[r1][c1]];
+    drawMatch3();
+    isAnimating=false;
+    return;
+  }
+  // Process cascade
+  await processCascade();
+  isAnimating=false;
+}
+
+function findMatches(){
+  const matched=new Set();
+  // Horizontal
+  for(let r=0;r<GRID_N;r++){
+    for(let c=0;c<GRID_N-2;c++){
+      if(board[r][c]===-1) continue;
+      if(board[r][c]===board[r][c+1]&&board[r][c]===board[r][c+2]){
+        let end=c+2;
+        while(end+1<GRID_N&&board[r][end+1]===board[r][c]) end++;
+        for(let i=c;i<=end;i++) matched.add(r*GRID_N+i);
+      }
+    }
+  }
+  // Vertical
+  for(let c=0;c<GRID_N;c++){
+    for(let r=0;r<GRID_N-2;r++){
+      if(board[r][c]===-1) continue;
+      if(board[r][c]===board[r+1][c]&&board[r][c]===board[r+2][c]){
+        let end=r+2;
+        while(end+1<GRID_N&&board[end+1][c]===board[r][c]) end++;
+        for(let i=r;i<=end;i++) matched.add(i*GRID_N+c);
+      }
+    }
+  }
+  return [...matched].map(idx=>({r:Math.floor(idx/GRID_N),c:idx%GRID_N}));
+}
+
+async function processCascade(){
+  combo=0;
+  let matches=findMatches();
+  while(matches.length>0){
+    combo++;
+    const count=matches.length;
+    matchCount+=count;
+    // Particles
+    for(const m of matches){
+      const x=m.c*GEM_SIZE+GEM_SIZE/2, y=m.r*GEM_SIZE+GEM_SIZE/2;
+      addParticles(x,y,GEM_COLORS[board[m.r][m.c]],10, MX, GEM_SIZE);
+      board[m.r][m.c]=-1;
+    }
+    drawMatch3();
+    await sleep(200);
+    // Gravity
+    await applyGravity();
+    drawMatch3();
+    await sleep(150);
+    // Energy gain
+    let gained=count*2;
+    if(count>=5) gained=count*4; // 5消大奖励
+    if(combo>1) gained=Math.floor(gained*(1+combo*0.5)); // 连击翻倍
+    energy=Math.min(MAX_ENERGY, energy+gained);
+    updateHUD();
+    showMsg(`💎 消除${count}个${combo>1?' ×'+combo+'连击!':''} ⚡+${gained}`);
+    matches=findMatches();
+  }
+}
+
+async function applyGravity(){
+  for(let c=0;c<GRID_N;c++){
+    let writeR=GRID_N-1;
+    for(let r=GRID_N-1;r>=0;r--){
+      if(board[r][c]!==-1){
+        if(writeR!==r){
+          board[writeR][c]=board[r][c];
+          board[r][c]=-1;
+        }
+        writeR--;
+      }
+    }
+    // Fill top
+    for(let r=writeR;r>=0;r--){
+      board[r][c]=Math.floor(Math.random()*GEM_COLORS.length);
+    }
+  }
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ========== SNAKE ENGINE ==========
+function initSnake(){
+  snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir={x:1,y:0}; nextDir={x:1,y:0}; snakeLen=3; gameOverFlag=false;
+  food=spawnFood();
+}
+
+function spawnFood(){
+  let p;
+  do{p={x:Math.floor(Math.random()*SCOLS),y:Math.floor(Math.random()*SROWS)};}
+  while(snake.some(s=>s.x===p.x&&s.y===p.y));
+  return p;
+}
+
+function drawSnake(){
+  SX.clearRect(0,0,SC.width,SC.height);
+  // BG
+  SX.fillStyle='rgba(5,15,30,0.9)'; SX.fillRect(0,0,SC.width,SC.height);
+  // Grid
+  SX.fillStyle='rgba(255,255,255,0.02)';
+  for(let x=0;x<SCOLS;x++) for(let y=0;y<SROWS;y++) SX.fillRect(x*SGRID+9,y*SGRID+9,2,2);
+
+  // Snake body
+  for(let i=0;i<snake.length;i++){
+    const ratio=1-i/snake.length;
+    const hue=140+ratio*60;
+    SX.fillStyle=`hsl(${hue},80%,${30+ratio*30}%)`;
+    SX.shadowColor=i===0?'#00ff88':'#00cc66'; SX.shadowBlur=i===0?12:4;
+    const x=snake[i].x*SGRID+1, y=snake[i].y*SGRID+1, w=SGRID-2, h=SGRID-2, r=4;
+    SX.beginPath(); SX.moveTo(x+r,y);
+    SX.arcTo(x+w,y,x+w,y+h,r); SX.arcTo(x+w,y+h,x,y+h,r);
+    SX.arcTo(x,y+h,x,y,r); SX.arcTo(x,y,x+w,y,r); SX.fill();
+    SX.shadowBlur=0;
+    // Eyes
+    if(i===0){
+      SX.fillStyle='#fff';
+      SX.beginPath();
+      SX.arc(snake[0].x*SGRID+SGRID/2-3,snake[0].y*SGRID+SGRID/2-2,2,0,Math.PI*2);
+      SX.arc(snake[0].x*SGRID+SGRID/2+3,snake[0].y*SGRID+SGRID/2-2,2,0,Math.PI*2);
+      SX.fill();
+      SX.fillStyle='#111';
+      SX.beginPath();
+      SX.arc(snake[0].x*SGRID+SGRID/2-3,snake[0].y*SGRID+SGRID/2-2,1,0,Math.PI*2);
+      SX.arc(snake[0].x*SGRID+SGRID/2+3,snake[0].y*SGRID+SGRID/2-2,1,0,Math.PI*2);
+      SX.fill();
+    }
+  }
+
+  // Food
+  SX.shadowColor='#e94560'; SX.shadowBlur=15; SX.fillStyle='#e94560';
+  SX.beginPath();
+  SX.arc(food.x*SGRID+SGRID/2, food.y*SGRID+SGRID/2, SGRID/2-3, 0, Math.PI*2);
+  SX.fill(); SX.shadowBlur=0;
+
+  // AI mode indicator
+  if(aiMode){
+    SX.fillStyle='rgba(0,212,255,0.15)'; SX.fillRect(0,0,SC.width,SC.height);
+    SX.fillStyle='#00d4ff'; SX.font='bold 14px monospace'; SX.textAlign='center';
+    SX.fillText('🤖 AI MODE', SC.width/2, 18);
+    // Path visualization
+    const path=astar(snake[0],food,[snake]);
+    if(path){
+      SX.strokeStyle='rgba(0,212,255,0.25)'; SX.lineWidth=SGRID*0.5; SX.lineCap='round';
+      SX.beginPath(); SX.moveTo(snake[0].x*SGRID+SGRID/2,snake[0].y*SGRID+SGRID/2);
+      for(const p of path) SX.lineTo(p.x*SGRID+SGRID/2,p.y*SGRID+SGRID/2);
+      SX.stroke();
+    }
+  }
+
+  // Check win
+  if(snake.length>=SCOLS*SROWS){
+    gameOverFlag=true; started=false;
+    showOverlay('🎉 霸屏胜利！',`恭喜！贪吃蛇填满了整个棋盘！\n最终长度: ${snakeLen}`,'🔄 再来一局');
+  }
+}
+
+// ========== A* PATHFINDING ==========
+function h2(a,b){return Math.abs(a.x-b.x)+Math.abs(a.y-b.y);}
+function nb2(n){
+  return [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}]
+    .map(d=>({x:n.x+d.x,y:n.y+d.y}))
+    .filter(p=>p.x>=0&&p.x<SCOLS&&p.y>=0&&p.y<SROWS);
+}
+function blocked2(p,bodies){
+  return bodies.some(b=>b.slice(0,-1).some(s=>s.x===p.x&&s.y===p.y));
+}
+function astar(start,target,bodies){
+  const open=[{...start,g:0,f:h2(start,target),p:null}],closed=new Set();
+  while(open.length){
+    open.sort((a,b)=>a.f-b.f);
+    const c=open.shift(),k=c.x+','+c.y;
+    if(closed.has(k))continue;closed.add(k);
+    if(c.x===target.x&&c.y===target.y){
+      const path=[];let n=c;while(n.p){path.unshift({x:n.x,y:n.y});n=n.p;}return path;
+    }
+    for(const n of nb2(c)){
+      if(closed.has(n.x+','+n.y))continue;
+      if(blocked2(n,bodies))continue;
+      const g=c.g+1,ex=open.find(o=>o.x===n.x&&o.y===n.y);
+      if(!ex||g<ex.g){if(ex){ex.g=g;ex.f=g+h2(n,target);ex.p=c;}else open.push({...n,g,f:g+h2(n,target),p:c});}
+    }
+  }
+  return null;
+}
+
+// ========== SNAKE LOGIC ==========
+function sDir(x,y){
+  if(dir.x+x===0&&dir.y+y===0)return;
+  nextDir={x,y};
+  if(aiMode){aiMode=false;showMsg('🎮 手动控制');}
+}
+
+function moveSnake(){
+  if(gameOverFlag||!started) return;
+  dir={...nextDir};
+  const head={x:snake[0].x+dir.x, y:snake[0].y+dir.y};
+
+  // Collision
+  if(head.x<0||head.x>=SCOLS||head.y<0||head.y>=SROWS||snake.some(s=>s.x===head.x&&s.y===head.y)){
+    gameOverFlag=true; started=false;
+    showOverlay('💀 Game Over!',`蛇长: ${snakeLen} | 消除: ${matchCount}`,'🔄 再来一局');
+    return;
+  }
+
+  snake.unshift(head);
+  if(head.x===food.x&&head.y===food.y){
+    snakeLen++;
+    document.getElementById('snake-len').textContent=snakeLen;
+    if(snakeLen>bestLen){bestLen=snakeLen;document.getElementById('best-len').textContent=bestLen;}
+    food=spawnFood();
+    addParticles(head.x*SGRID+SGRID/2, head.y*SGRID+SGRID/2, '#00ff88', 12, SX, 1);
+  } else {
+    snake.pop();
+  }
+}
+
+// ========== AI AUTO ==========
+function aiTick(){
+  if(!aiMode||energy<AI_COST||gameOverFlag) return;
+  const path=astar(snake[0],food,[snake]);
+  if(path&&path.length>0){
+    const next=path[0];
+    dir={x:next.x-snake[0].x, y:next.y-snake[0].y};
+    nextDir={...dir};
+    energy-=AI_COST;
+    updateHUD();
+  } else {
+    // Fallback: safe move
+    const dirs=[{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+    for(const d of dirs){
+      const n={x:snake[0].x+d.x,y:snake[0].y+d.y};
+      if(n.x>=0&&n.x<SCOLS&&n.y>=0&&n.y<SROWS&&!snake.some(s=>s.x===n.x&&s.y===n.y)){
+        dir=d;nextDir={...d};energy-=AI_COST;updateHUD();break;
+      }
+    }
+  }
+}
+
+// ========== PARTICLES ==========
+function addParticles(x,y,color,count,ctx,scale){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2,sp=Math.random()*3+1;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color,size:Math.random()*4+2,ctx,scale:scale||1});
+  }
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life-=0.03;p.size*=0.97;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+function drawParticles(){
+  for(const p of particles){
+    p.ctx.globalAlpha=p.life;p.ctx.fillStyle=p.color;
+    p.ctx.beginPath();p.ctx.arc(p.x,p.y,p.size,0,Math.PI*2);p.ctx.fill();
+  }
+  if(particles.length>0) particles[0].ctx.globalAlpha=1;
+}
+
+// ========== HUD ==========
+function updateHUD(){
+  document.getElementById('snake-len').textContent=snakeLen;
+  document.getElementById('match-cnt').textContent=matchCount;
+  document.getElementById('best-len').textContent=bestLen;
+  const pct=energy/MAX_ENERGY*100;
+  document.getElementById('energy-fill').style.width=pct+'%';
+  document.getElementById('energy-label').textContent=`${energy} / ${MAX_ENERGY}`;
+  if(energy>=50) document.getElementById('energy-fill').style.background='linear-gradient(90deg,#00d4ff,#00ff88)';
+  else if(energy>=20) document.getElementById('energy-fill').style.background='linear-gradient(90deg,#ffd700,#ff8800)';
+  else document.getElementById('energy-fill').style.background='linear-gradient(90deg,#e94560,#ff4444)';
+}
+
+function showMsg(t){
+  const m=document.getElementById('msg');m.textContent=t;
+  clearTimeout(m._t);m._t=setTimeout(()=>m.textContent='',2000);
+}
+
+// ========== GAME TICK ==========
+function gameTick(){
+  if(paused||gameOverFlag||!started) return;
+  // AI mode
+  if(aiMode) aiTick();
+  // Move snake (manual or AI)
+  moveSnake();
+  // Draw
+  drawMatch3(); drawSnake(); updateParticles();
+  drawParticles();
+}
+
+// ========== KEYBOARD ==========
+document.addEventListener('keydown',e=>{
+  if(!started&&!gameOverFlag&&(e.key==='Enter'||e.key===' ')){startGame();return;}
+  switch(e.key){
+    case'ArrowUp':case'w':case'W':sDir(0,-1);break;
+    case'ArrowDown':case's':case'S':sDir(0,1);break;
+    case'ArrowLeft':case'a':case'A':sDir(-1,0);break;
+    case'ArrowRight':case'd':case'D':sDir(1,0);break;
+    case' ':
+      e.preventDefault();
+      if(started&&energy>=AI_COST){aiMode=!aiMode;showMsg(aiMode?'🤖 AI接管！':'🎮 手动控制');}
+      else if(energy<AI_COST) showMsg('⚡ 能量不足！去三消充能！');
+      break;
+    case'r':case'R':if(started||gameOverFlag)startGame();break;
+    case'p':case'P':if(started){paused=!paused;showMsg(paused?'⏸ 暂停':'▶️ 继续');}break;
+  }
+});
+
+// ========== INIT ==========
+initMatch3(); initSnake(); drawMatch3(); drawSnake();
+showOverlay('🐍 能量贪吃蛇','三消消除 → 获得能量 → 空格开启AI自动 → 霸屏胜利！','🎮 开始游戏');
+</script>
+</body>
+</html>

@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🎲 骰子总动员</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:linear-gradient(180deg,#1a0a2e 0%,#0d1b3e 50%,#0a2a1a 100%);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  font-family:'Segoe UI',system-ui,sans-serif;color:#fff;
+  overflow:hidden;user-select:none;-webkit-user-select:none;
+}
+h1{
+  font-size:28px;margin:10px 0 2px;letter-spacing:3px;
+  background:linear-gradient(90deg,#ff6b6b,#ffd93d,#6bcb77,#4d96ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  font-weight:900;
+}
+#score-area{
+  display:flex;gap:15px;align-items:center;margin:6px 0;
+  font-size:14px;
+}
+.score-box{
+  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);
+  padding:4px 14px;border-radius:20px;
+}
+.score-val{font-weight:bold;font-size:18px;color:#ffd93d;}
+.best-val{font-weight:bold;font-size:16px;color:#ff6b6b;}
+#game-area{
+  position:relative;margin-top:6px;
+}
+canvas#board{
+  border-radius:16px;
+  box-shadow:0 0 40px rgba(255,215,0,0.15), inset 0 0 60px rgba(0,0,0,0.4);
+  background:rgba(10,20,40,0.9);
+  border:2px solid rgba(255,255,255,0.1);
+}
+#next-preview{
+  position:absolute;top:-50px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);
+  padding:6px 16px;border-radius:12px;font-size:12px;
+  display:flex;align-items:center;gap:8px;
+  backdrop-filter:blur(10px);
+}
+#next-canvas{display:block;}
+#controls{
+  display:flex;gap:10px;margin-top:10px;
+}
+#controls button{
+  width:60px;height:44px;font-size:22px;
+  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+  color:#fff;border-radius:12px;cursor:pointer;
+  backdrop-filter:blur(5px);transition:all 0.15s;
+}
+#controls button:active{
+  background:rgba(255,255,255,0.2);transform:scale(0.95);
+}
+#drop-btn{
+  width:80px;height:44px;font-size:16px;font-weight:bold;
+  background:linear-gradient(135deg,#e94560,#c73e54);
+  border:none;color:#fff;border-radius:12px;cursor:pointer;
+  box-shadow:0 4px 15px rgba(233,69,96,0.4);transition:all 0.15s;
+}
+#drop-btn:active{transform:scale(0.95);}
+#msg{
+  margin-top:8px;font-size:12px;color:#ffd93d;min-height:18px;
+  text-shadow:0 0 10px rgba(255,217,61,0.5);
+}
+#overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:100;
+}
+#overlay.hidden{display:none;}
+#overlay h2{font-size:40px;margin-bottom:8px;}
+#overlay p{font-size:16px;color:#aaa;margin-bottom:20px;text-align:center;max-width:300px;}
+#go-btn{
+  padding:14px 50px;font-size:22px;font-weight:bold;
+  background:linear-gradient(135deg,#ffd93d,#ff6b6b);color:#1a1a2e;
+  border:none;border-radius:30px;cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 25px rgba(255,217,61,0.4);transition:transform 0.2s;
+}
+#go-btn:hover{transform:scale(1.05);}
+#combo-popup{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:48px;font-weight:900;color:#ffd93d;
+  text-shadow:0 0 20px rgba(255,217,61,0.8);
+  pointer-events:none;opacity:0;transition:all 0.5s;
+}
+#combo-popup.show{opacity:1;transform:translate(-50%,-50%) scale(1.3);}
+#bet-bar{
+  display:flex;gap:8px;margin-top:8px;
+}
+#bet-bar button{
+  padding:5px 14px;font-size:13px;
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+  color:#aaa;border-radius:8px;cursor:pointer;transition:all 0.2s;
+}
+#bet-bar button.active{
+  background:rgba(255,217,61,0.15);border-color:#ffd93d;color:#ffd93d;
+}
+#hint-bar{
+  margin-top:6px;font-size:11px;color:#6bcb77;min-height:16px;
+}
+@media(max-width:400px){
+  canvas#board{width:320px!important;height:384px!important;}
+}
+</style>
+</head>
+<body>
+
+<h1>🎲 骰子总动员</h1>
+
+<div id="score-area">
+  <div class="score-box">得分: <span class="score-val" id="score">0</span></div>
+  <div class="score-box">最高: <span class="best-val" id="best">0</span></div>
+  <div class="score-box">倍率: <span id="bet-mult">1</span>x</div>
+</div>
+
+<div id="game-area">
+  <div id="next-preview">
+    <span style="color:#aaa">NEXT</span>
+    <canvas id="next-canvas" width="50" height="50"></canvas>
+  </div>
+  <canvas id="board" width="350" height="420"></canvas>
+  <div id="combo-popup"></div>
+</div>
+
+<div id="controls">
+  <button ontouchstart="moveLeft()" onclick="moveLeft()">◀</button>
+  <button id="drop-btn" ontouchstart="dropDice()" onclick="dropDice()">⬇ 落下</button>
+  <button ontouchstart="moveRight()" onclick="moveRight()">▶</button>
+</div>
+
+<div id="bet-bar">
+  <button onclick="setBet(1)" id="bet1" class="active">1元</button>
+  <button onclick="setBet(2)" id="bet2">2元</button>
+  <button onclick="setBet(5)" id="bet5">5元</button>
+  <button onclick="setBet(10)" id="bet10">10元</button>
+</div>
+
+<div id="hint-bar"></div>
+<div id="msg"></div>
+
+<div id="overlay">
+  <h2>🎲 骰子总动员</h2>
+  <p>相同数字碰撞合并！<br>填满棋盘之前，拿到最高分！</p>
+  <button id="go-btn" onclick="startGame()">🎮 开始</button>
+</div>
+
+<script>
+// ===== CONFIG =====
+const C=document.getElementById('board'),X=C.getContext('2d');
+const NC=document.getElementById('next-canvas'),NX=NC.getContext('2d');
+const COLS=7,ROWS=10,CELL=C.width/COLS;
+const BET_MULTS={1:1,2:2,5:5,10:10};
+
+// Dice colors by number (1-6)
+const DICE_COLORS={
+  1:{bg:'#e94560',dot:'#fff',glow:'rgba(233,69,96,0.6)'},
+  2:{bg:'#4d96ff',dot:'#fff',glow:'rgba(77,150,255,0.6)'},
+  3:{bg:'#6bcb77',dot:'#fff',glow:'rgba(107,203,119,0.6)'},
+  4:{bg:'#ffd93d',dot:'#333',glow:'rgba(255,217,61,0.6)'},
+  5:{bg:'#a855f7',dot:'#fff',glow:'rgba(168,85,247,0.6)'},
+  6:{bg:'#ff8c42',dot:'#fff',glow:'rgba(255,140,66,0.6)'},
+};
+
+// Dot positions for dice faces (relative to center, normalized to -1~1)
+const DICE_DOTS={
+  1:[[0,0]],
+  2:[[-0.35,-0.35],[0.35,0.35]],
+  3:[[-0.35,-0.35],[0,0],[0.35,0.35]],
+  4:[[-0.35,-0.35],[0.35,-0.35],[-0.35,0.35],[0.35,0.35]],
+  5:[[-0.35,-0.35],[0.35,-0.35],[0,0],[-0.35,0.35],[0.35,0.35]],
+  6:[[-0.35,-0.35],[0.35,-0.35],[-0.35,0],[0.35,0],[-0.35,0.35],[0.35,0.35]],
+};
+
+// ===== STATE =====
+let grid=[], score=0, best=parseInt(localStorage.getItem('diceBest')||'0');
+let curDice=1, nextDice=1, curCol=3, dropping=false, started=false, gameOver=false;
+let bet=1, combo=0, particles=[], floatingTexts=[];
+let animCells=[]; // {r,c,val,opacity} for merge animation
+let dropAnim=null; // {col, fromY, toY, val}
+
+document.getElementById('best').textContent=best;
+
+// ===== INIT =====
+function init(){
+  grid=[];
+  for(let r=0;r<ROWS;r++){grid[r]=[];for(let c=0;c<COLS;c++)grid[r][c]=0;}
+  score=0;combo=0;gameOver=false;
+  curDice=genDice();nextDice=genDice();curCol=3;
+  particles=[];floatingTexts=[];animCells=[];dropAnim=null;
+  document.getElementById('score').textContent='0';
+  document.getElementById('msg').textContent='';
+  document.getElementById('hint-bar').textContent='';
+  drawNext();draw();
+}
+
+function genDice(){
+  // Weighted random: more 1s and 2s, fewer high numbers
+  const w=[0,30,25,20,12,8,5]; // index by value
+  const total=w.reduce((a,b)=>a+b,0);
+  let r=Math.random()*total,cum=0;
+  for(let i=1;i<=6;i++){cum+=w[i];if(r<cum)return i;}
+  return 1;
+}
+
+// ===== DRAW =====
+function draw(){
+  X.clearRect(0,0,C.width,C.height);
+
+  // BG gradient
+  const grad=X.createLinearGradient(0,0,0,C.height);
+  grad.addColorStop(0,'rgba(10,20,40,0.95)');
+  grad.addColorStop(1,'rgba(5,15,30,0.95)');
+  X.fillStyle=grad;X.fillRect(0,0,C.width,C.height);
+
+  // Grid lines
+  X.strokeStyle='rgba(255,255,255,0.04)';X.lineWidth=1;
+  for(let c=1;c<COLS;c++){X.beginPath();X.moveTo(c*CELL,0);X.lineTo(c*CELL,C.height);X.stroke();}
+  for(let r=1;r<ROWS;r++){X.beginPath();X.moveTo(0,r*CELL);X.lineTo(C.width,r*CELL);X.stroke();}
+
+  // Draw placed dice
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      if(grid[r][c]>0) drawDice(c*CELL+CELL/2, r*CELL+CELL/2, grid[r][c], CELL*0.4);
+    }
+  }
+
+  // Draw drop animation
+  if(dropAnim){
+    const da=dropAnim;
+    drawDice(da.col*CELL+CELL/2, da.y, da.val, CELL*0.4);
+  }
+
+  // Draw current dice at top (preview in column)
+  if(!dropping&&!gameOver&&started){
+    // Show ghost at lowest available position
+    const ghostR=getLowestRow(curCol);
+    if(ghostR>=0){
+      X.globalAlpha=0.25;
+      drawDice(curCol*CELL+CELL/2, ghostR*CELL+CELL/2, curDice, CELL*0.4);
+      X.globalAlpha=1;
+    }
+    // Show current at top
+    drawDice(curCol*CELL+CELL/2, -CELL*0.5, curDice, CELL*0.4);
+  }
+
+  // Column highlight
+  if(!dropping&&!gameOver&&started){
+    X.fillStyle='rgba(255,255,255,0.03)';
+    X.fillRect(curCol*CELL,0,CELL,C.height);
+  }
+
+  // Particles
+  drawParts();
+
+  // Floating texts
+  drawFloats();
+
+  // Game over overlay on canvas
+  if(gameOver){
+    X.fillStyle='rgba(0,0,0,0.6)';X.fillRect(0,0,C.width,C.height);
+    X.fillStyle='#ffd93d';X.font='bold 32px sans-serif';X.textAlign='center';
+    X.fillText('GAME OVER',C.width/2,C.height/2-10);
+    X.fillStyle='#fff';X.font='18px sans-serif';
+    X.fillText('得分: '+score,C.width/2,C.height/2+25);
+  }
+}
+
+function drawDice(cx,cy,val,size){
+  if(val<1||val>6)return;
+  const col=DICE_COLORS[val];
+  const s=size, r=8;
+
+  // Shadow
+  X.shadowColor=col.glow;X.shadowBlur=12;
+
+  // Body
+  X.fillStyle=col.bg;
+  X.beginPath();
+  X.moveTo(cx-s+r,cy-s);
+  X.arcTo(cx+s,cy-s,cx+s,cy+s,r);
+  X.arcTo(cx+s,cy+s,cx-s,cy+s,r);
+  X.arcTo(cx-s,cy+s,cx-s,cy-s,r);
+  X.arcTo(cx-s,cy-s,cx+s,cy-s,r);
+  X.fill();
+  X.shadowBlur=0;
+
+  // Inner highlight
+  X.fillStyle='rgba(255,255,255,0.15)';
+  X.beginPath();
+  X.moveTo(cx-s+r,cy-s+2);
+  X.arcTo(cx+s-2,cy-s+2,cx+s-2,cy,r);
+  X.lineTo(cx-s+r,cy-s+2);
+  X.fill();
+
+  // Dots
+  X.fillStyle=col.dot;
+  const dotR=s*0.13;
+  for(const [dx,dy] of DICE_DOTS[val]){
+    X.beginPath();
+    X.arc(cx+dx*s*0.7, cy+dy*s*0.7, dotR, 0, Math.PI*2);
+    X.fill();
+  }
+
+  // Number label
+  X.fillStyle='rgba(255,255,255,0.9)';
+  X.font=`bold ${s*0.5}px sans-serif`;
+  X.textAlign='center';X.textBaseline='middle';
+  X.fillText(val, cx, cy);
+}
+
+function drawNext(){
+  NX.clearRect(0,0,50,50);
+  drawDiceCtx(NX, 25, 25, nextDice, 18);
+}
+
+function drawDiceCtx(ctx,cx,cy,val,s){
+  const col=DICE_COLORS[val];if(!col)return;
+  ctx.fillStyle=col.bg;
+  const r=5;
+  ctx.beginPath();
+  ctx.moveTo(cx-s+r,cy-s);ctx.arcTo(cx+s,cy-s,cx+s,cy+s,r);
+  ctx.arcTo(cx+s,cy+s,cx-s,cy+s,r);ctx.arcTo(cx-s,cy+s,cx-s,cy-s,r);
+  ctx.arcTo(cx-s,cy-s,cx+s,cy-s,r);ctx.fill();
+  ctx.fillStyle=col.dot;
+  const dr=s*0.12;
+  for(const [dx,dy] of DICE_DOTS[val]){
+    ctx.beginPath();ctx.arc(cx+dx*s*0.7,cy+dy*s*0.7,dr,0,Math.PI*2);ctx.fill();
+  }
+}
+
+// ===== GAME LOGIC =====
+function getLowestRow(col){
+  for(let r=ROWS-1;r>=0;r--){if(grid[r][col]===0)return r;}
+  return -1;
+}
+
+function moveLeft(){
+  if(dropping||gameOver||!started)return;
+  curCol=Math.max(0,curCol-1);draw();
+}
+function moveRight(){
+  if(dropping||gameOver||!started)return;
+  curCol=Math.min(COLS-1,curCol+1);draw();
+}
+
+function dropDice(){
+  if(dropping||gameOver||!started)return;
+  const targetR=getLowestRow(curCol);
+  if(targetR<0){showMsg('❌ 这列满了！');return;}
+
+  dropping=true;
+  const val=curDice;
+  const startY=-CELL*0.5;
+  const endY=targetR*CELL+CELL/2;
+  const speed=12; // pixels per frame
+
+  dropAnim={col:curCol, y:startY, val, targetR, endY};
+
+  function animateDrop(){
+    if(!dropAnim)return;
+    dropAnim.y+=speed;
+    if(dropAnim.y>=dropAnim.endY){
+      // Place on grid
+      grid[targetR][curCol]=val;
+      dropAnim=null;
+      dropping=false;
+
+      // Check merges
+      processMerges(curCol, targetR, val).then(()=>{
+        if(!gameOver){
+          curDice=nextDice;nextDice=genDice();curCol=3;
+          drawNext();
+          // Check game over
+          if(getLowestRow(3)<0){
+            // Find any available column
+            let placed=false;
+            for(let c=0;c<COLS;c++){
+              if(getLowestRow(c)>=0){curCol=c;placed=true;break;}
+            }
+            if(!placed){endGame();return;}
+          }
+          // AI hint
+          showHint();
+          draw();
+        }
+      });
+      return;
+    }
+    draw();
+    requestAnimationFrame(animateDrop);
+  }
+  requestAnimationFrame(animateDrop);
+}
+
+async function processMerges(col, row, val){
+  let merged=true;
+  let totalCombo=0;
+
+  while(merged){
+    merged=false;
+    const toMerge=findMergeGroup(col, row);
+    if(toMerge.length>=2){
+      merged=true;totalCombo++;
+      const newVal=Math.min(6, val+1);
+
+      // Animate merge
+      for(const p of toMerge){
+        addParts(p.c*CELL+CELL/2, p.r*CELL+CELL/2, DICE_COLORS[grid[p.r][p.c]].bg, 8);
+        grid[p.r][p.c]=0;
+      }
+      draw();
+      await sleep(150);
+
+      // Place merged result at lowest position in column
+      // Actually, merge at the position of the first cell
+      const mergeR=toMerge[0].r, mergeC=toMerge[0].c;
+
+      // Apply gravity first
+      applyGravity();
+      draw();
+      await sleep(100);
+
+      // Place new value at top and let it fall
+      const targetR=getLowestRow(mergeC);
+      if(targetR>=0){
+        grid[targetR][mergeC]=newVal;
+        val=newVal;
+        row=targetR;col=mergeC;
+
+        // Score
+        const pts=newVal*10*bet*(totalCombo>1?totalCombo:1);
+        score+=pts;
+        document.getElementById('score').textContent=score;
+        if(score>best){best=score;localStorage.setItem('diceBest',best);document.getElementById('best').textContent=best;}
+
+        // Floating text
+        addFloat(mergeC*CELL+CELL/2, targetR*CELL+CELL/2, `+${pts}`, totalCombo>1?'#ffd93d':'#fff');
+
+        if(totalCombo>1) showCombo(totalCombo);
+
+        addParts(mergeC*CELL+CELL/2, targetR*CELL+CELL/2, DICE_COLORS[newVal].bg, 15);
+        draw();
+        await sleep(200);
+      }
+    }
+  }
+  applyGravity();draw();
+}
+
+function findMergeGroup(col, row){
+  const val=grid[row][col];
+  if(val===0||val>=6)return[];
+  const group=[{r:row,c:col}];
+  const visited=new Set([row+','+col]);
+  const queue=[{r:row,c:col}];
+
+  while(queue.length){
+    const{r,c}=queue.shift();
+    const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+    for(const[dr,dc]of dirs){
+      const nr=r+dr,nc=c+dc;
+      const k=nr+','+nc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!visited.has(k)&&grid[nr][nc]===val){
+        visited.add(k);group.push({r:nr,c:nc});queue.push({r:nr,c:nc});
+      }
+    }
+  }
+  return group.length>=2?group:[];
+}
+
+function applyGravity(){
+  for(let c=0;c<COLS;c++){
+    let writeR=ROWS-1;
+    for(let r=ROWS-1;r>=0;r--){
+      if(grid[r][c]>0){
+        if(writeR!==r){grid[writeR][c]=grid[r][c];grid[r][c]=0;}
+        writeR--;
+      }
+    }
+  }
+}
+
+// ===== AI HINT =====
+function showHint(){
+  let bestCol=0,bestScore=-Infinity;
+  for(let c=0;c<COLS;c++){
+    const r=getLowestRow(c);
+    if(r<0)continue;
+    let sc=0;
+    // Check if placing here creates a merge
+    grid[r][c]=curDice;
+    const group=findMergeGroup(c,r);
+    if(group.length>=2) sc+=group.length*50;
+    // Prefer center columns
+    sc-=Math.abs(c-3)*5;
+    // Prefer lower rows
+    sc+=r*2;
+    // Check if this creates a chain
+    grid[r][c]=0;
+    if(sc>bestScore){bestScore=sc;bestCol=c;}
+  }
+  const hint=bestCol===curCol?'✅ 当前位置不错':'💡 建议移到第'+(bestCol+1)+'列';
+  document.getElementById('hint-bar').textContent=hint;
+}
+
+// ===== BET =====
+function setBet(b){
+  bet=b;
+  document.querySelectorAll('#bet-bar button').forEach(btn=>btn.classList.remove('active'));
+  document.getElementById('bet'+b).classList.add('active');
+  document.getElementById('bet-mult').textContent=bet;
+}
+
+// ===== EFFECTS =====
+function addParts(x,y,color,count){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2,sp=Math.random()*4+1;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color,size:Math.random()*5+2});
+  }
+}
+function drawParts(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life-=0.035;p.size*=0.96;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    X.globalAlpha=p.life;X.fillStyle=p.color;
+    X.beginPath();X.arc(p.x,p.y,p.size,0,Math.PI*2);X.fill();
+  }
+  X.globalAlpha=1;
+}
+
+function addFloat(x,y,text,color){
+  floatingTexts.push({x,y,text,color,life:1,vy:-2});
+}
+function drawFloats(){
+  for(let i=floatingTexts.length-1;i>=0;i--){
+    const f=floatingTexts[i];f.y+=f.vy;f.life-=0.025;
+    if(f.life<=0){floatingTexts.splice(i,1);continue;}
+    X.globalAlpha=f.life;X.fillStyle=f.color;
+    X.font='bold 20px sans-serif';X.textAlign='center';
+    X.fillText(f.text,f.x,f.y);
+  }
+  X.globalAlpha=1;
+}
+
+function showCombo(n){
+  const el=document.getElementById('combo-popup');
+  el.textContent='🔥 '+n+'连消！';el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),800);
+}
+
+function showMsg(t){document.getElementById('msg').textContent=t;}
+
+function endGame(){
+  gameOver=true;started=false;draw();
+  const ol=document.getElementById('overlay');ol.classList.remove('hidden');
+  document.getElementById('ol-title')&&(
+    document.querySelector('#overlay h2').textContent='💀 Game Over!'
+  );
+  document.querySelector('#overlay p').textContent=`得分: ${score} | 最高: ${best}`;
+  document.getElementById('go-btn').textContent='🔄 再来一局';
+}
+
+function startGame(){
+  init();started=true;
+  document.getElementById('overlay').classList.add('hidden');
+  draw();
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ===== KEYBOARD =====
+document.addEventListener('keydown',e=>{
+  if(!started&&!gameOver){if(e.key==='Enter'||e.key===' '){startGame();return;}}
+  if(gameOver){if(e.key==='r'||e.key==='R'||e.key==='Enter'){startGame();return;}}
+  switch(e.key){
+    case'ArrowLeft':case'a':case'A':moveLeft();break;
+    case'ArrowRight':case'd':case'D':moveRight();break;
+    case'ArrowDown':case' ':case'Enter':dropDice();break;
+    case'r':case'R':startGame();break;
+  }e.preventDefault();
+});
+
+// Touch swipe
+let touchX=0,touchY=0;
+C.addEventListener('touchstart',e=>{touchX=e.touches[0].clientX;touchY=e.touches[0].clientX;e.preventDefault();},{passive:false});
+C.addEventListener('touchmove',e=>{
+  const dx=e.touches[0].clientX-touchX;
+  if(Math.abs(dx)>30){
+    if(dx>0)moveRight();else moveLeft();
+    touchX=e.touches[0].clientX;
+  }
+  e.preventDefault();
+},{passive:false});
+C.addEventListener('touchend',e=>{
+  const dy=e.changedTouches[0].clientY-touchY;
+  if(dy>30) dropDice();
+  e.preventDefault();
+},{passive:false});
+
+// Click on board to select column
+C.addEventListener('click',e=>{
+  if(!started||dropping||gameOver)return;
+  const rect=C.getBoundingClientRect();
+  const scaleX=C.width/rect.width;
+  const c=Math.floor((e.clientX-rect.left)*scaleX/CELL);
+  if(c>=0&&c<COLS){
+    if(c===curCol) dropDice();
+    else{curCol=c;draw();}
+  }
+});
+
+// ===== INIT DRAW =====
+init();
+showOverlay();
+</script>
+</body>
+</html>

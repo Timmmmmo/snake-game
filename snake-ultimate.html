@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🐍 AI 贪吃蛇终极版</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0a1628 100%);
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 100vh; font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #e0e0e0; overflow-x: hidden;
+  padding: 10px;
+}
+h1 {
+  font-size: 24px; margin: 8px 0; letter-spacing: 2px;
+  background: linear-gradient(90deg, #00d4ff, #e94560, #00ff88);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+#top-bar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  justify-content: center; margin-bottom: 8px;
+}
+.stat-box {
+  background: rgba(15,52,96,0.6); border: 1px solid rgba(0,212,255,0.2);
+  padding: 5px 12px; border-radius: 8px; font-size: 13px;
+  backdrop-filter: blur(10px);
+}
+.stat-val { font-weight: bold; font-size: 16px; }
+.stat-val.green { color: #00ff88; }
+.stat-val.blue { color: #00d4ff; }
+.stat-val.red { color: #e94560; }
+.stat-val.gold { color: #ffd700; }
+#mode-bar {
+  display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center;
+}
+#mode-bar button {
+  padding: 6px 14px; font-size: 12px; border: 1px solid rgba(0,212,255,0.3);
+  background: rgba(15,52,96,0.4); color: #aaa; border-radius: 20px;
+  cursor: pointer; transition: all 0.3s; font-family: inherit;
+}
+#mode-bar button:hover { border-color: #00d4ff; color: #00d4ff; }
+#mode-bar button.active {
+  background: rgba(0,212,255,0.15); border-color: #00d4ff; color: #00d4ff;
+  box-shadow: 0 0 12px rgba(0,212,255,0.3);
+}
+#game-wrap {
+  position: relative; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 0 40px rgba(0,212,255,0.15), inset 0 0 40px rgba(0,0,0,0.3);
+}
+canvas { display: block; }
+#overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+  transition: opacity 0.3s;
+}
+#overlay.hidden { opacity: 0; pointer-events: none; }
+#overlay h2 { font-size: 32px; margin-bottom: 10px; }
+#overlay p { font-size: 16px; color: #aaa; margin-bottom: 15px; }
+#action-btn {
+  padding: 12px 36px; font-size: 18px; font-weight: bold;
+  background: linear-gradient(135deg, #e94560, #c73e54);
+  color: #fff; border: none; border-radius: 30px; cursor: pointer;
+  font-family: inherit; box-shadow: 0 4px 20px rgba(233,69,96,0.4);
+  transition: transform 0.2s;
+}
+#action-btn:hover { transform: scale(1.05); }
+#info-bar {
+  margin-top: 8px; display: flex; gap: 15px; font-size: 12px; color: #666;
+}
+#ai-hint {
+  margin-top: 6px; padding: 4px 12px; background: rgba(0,212,255,0.08);
+  border-radius: 6px; font-size: 12px; color: #00d4ff; min-height: 22px;
+}
+#mobile-pad {
+  display: none; margin-top: 10px;
+  grid-template-areas: ". u ." "l . r" ". d ."; gap: 8px;
+}
+#mobile-pad button {
+  width: 56px; height: 56px; font-size: 22px;
+  background: rgba(15,52,96,0.6); color: #00d4ff;
+  border: 1px solid rgba(0,212,255,0.3); border-radius: 14px;
+  cursor: pointer; backdrop-filter: blur(5px);
+}
+@media (pointer: coarse) { #mobile-pad { display: grid; } }
+.particle { position: absolute; border-radius: 50%; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<h1>🐍 AI 贪吃蛇 终极版</h1>
+
+<div id="top-bar">
+  <div class="stat-box">🟢 你: <span class="stat-val green" id="p-score">0</span></div>
+  <div class="stat-box">🔵 AI: <span class="stat-val blue" id="a-score">0</span></div>
+  <div class="stat-box">🏆 最高: <span class="stat-val gold" id="best">0</span></div>
+  <div class="stat-box">⏱ <span id="timer">0s</span></div>
+</div>
+
+<div id="mode-bar">
+  <button onclick="setMode('classic')" id="m-classic" class="active">🎮 经典</button>
+  <button onclick="setMode('ai')" id="m-ai">🤖 AI表演</button>
+  <button onclick="setMode('versus')" id="m-versus">⚔️ 对战</button>
+  <button onclick="setMode('coach')" id="m-coach">💡 教练</button>
+  <button onclick="setMode('challenge')" id="m-challenge">🏆 挑战</button>
+</div>
+
+<div id="game-wrap">
+  <canvas id="game" width="400" height="400"></canvas>
+  <div id="overlay">
+    <h2 id="ol-title">🐍 AI 贪吃蛇</h2>
+    <p id="ol-desc">选择模式，点击开始</p>
+    <button id="action-btn" onclick="onAction()">🎮 开始游戏</button>
+  </div>
+</div>
+
+<div id="ai-hint"></div>
+
+<div id="info-bar">
+  <span>⬆️⬇️⬅️➡️ 移动</span>
+  <span>Space 暂停</span>
+  <span>R 重开</span>
+  <span>V 路径可视化</span>
+</div>
+
+<div id="mobile-pad">
+  <button onclick="setDir(0,-1)" style="grid-area:u">▲</button>
+  <button onclick="setDir(-1,0)" style="grid-area:l">◀</button>
+  <button onclick="setDir(1,0)" style="grid-area:r">▶</button>
+  <button onclick="setDir(0,1)" style="grid-area:d">▼</button>
+</div>
+
+<script>
+// ===== CONFIG =====
+const C = document.getElementById('game'), X = C.getContext('2d');
+const G = 20, COLS = C.width/G, ROWS = C.height/G;
+
+// ===== STATE =====
+let snake, aiSnake, dir, nextDir, aiDir, food, bonusFood;
+let pScore, aScore, steps, best = 0, paused, started, speed;
+let mode = 'classic', showPath = false, timerStart, timerInterval;
+let particles = [], gameOverFlag = false;
+let challengeTime = 60, challengeInterval;
+
+// ===== MODES =====
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('#mode-bar button').forEach(b => b.classList.remove('active'));
+  document.getElementById('m-'+m).classList.add('active');
+  if (started) stopGame();
+  resetOverlay();
+}
+
+function resetOverlay() {
+  const ol = document.getElementById('overlay');
+  ol.classList.remove('hidden');
+  const titles = {classic:'🎮 经典模式',ai:'🤖 AI 自动表演',versus:'⚔️ 人机对战',coach:'💡 AI 教练',challenge:'🏆 限时挑战'};
+  const descs = {classic:'控制绿蛇吃食物',ai:'看AI表演A*寻路',versus:'你的绿蛇 vs AI蓝蛇',coach:'AI告诉你最佳方向',challenge:'60秒内吃最多'};
+  document.getElementById('ol-title').textContent = titles[mode];
+  document.getElementById('ol-desc').textContent = descs[mode];
+  document.getElementById('action-btn').textContent = '🎮 开始游戏';
+}
+
+function onAction() {
+  if (started && !gameOverFlag) { togglePause(); return; }
+  startGame();
+}
+
+// ===== INIT =====
+function init() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  aiSnake = [{x:10,y:4},{x:9,y:4},{x:8,y:4}];
+  dir = {x:1,y:0}; nextDir = {x:1,y:0}; aiDir = {x:1,y:0};
+  pScore = 0; aScore = 0; steps = 0; paused = false; started = false;
+  gameOverFlag = false; speed = 120; bonusFood = null; particles = [];
+  food = spawn([snake, mode==='versus'?aiSnake:[]]);
+  $('p-score').textContent = '0'; $('a-score').textContent = '0';
+  $('timer').textContent = '0s'; $('ai-hint').textContent = '';
+  draw();
+}
+
+function $(id) { return document.getElementById(id); }
+
+function spawn(extra=[]) {
+  const occ = [...snake, ...aiSnake, ...extra.flat()];
+  let p; do { p = {x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)}; }
+  while (occ.some(s=>s.x===p.x&&s.y===p.y));
+  return p;
+}
+
+// ===== A* PATHFINDING =====
+function h(a,b) { return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+function nb(n) {
+  return [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}]
+    .map(d=>({x:n.x+d.x,y:n.y+d.y}))
+    .filter(p=>p.x>=0&&p.x<COLS&&p.y>=0&&p.y<ROWS);
+}
+function blocked(p, bodies) {
+  return bodies.some(b=>b.slice(0,-1).some(s=>s.x===p.x&&s.y===p.y));
+}
+
+function astar(start, target, bodies) {
+  const open=[{...start,g:0,f:h(start,target),p:null}], closed=new Set();
+  while(open.length){
+    open.sort((a,b)=>a.f-b.f);
+    const c=open.shift(), k=c.x+','+c.y;
+    if(closed.has(k)) continue; closed.add(k);
+    if(c.x===target.x&&c.y===target.y){
+      const path=[]; let n=c; while(n.p){path.unshift({x:n.x,y:n.y});n=n.p;} return path;
+    }
+    for(const n of nb(c)){
+      if(closed.has(n.x+','+n.y)) continue;
+      if(blocked(n,bodies)) continue;
+      const g=c.g+1, ex=open.find(o=>o.x===n.x&&o.y===n.y);
+      if(!ex||g<ex.g){if(ex){ex.g=g;ex.f=g+h(n,target);ex.p=c;}else open.push({...n,g,f:g+h(n,target),p:c});}
+    }
+  }
+  return null;
+}
+
+function floodFill(start, bodies) {
+  const vis=new Set(), q=[start]; let cnt=0;
+  while(q.length&&cnt<COLS*ROWS*2){
+    const n=q.shift(),k=n.x+','+n.y;
+    if(vis.has(k)) continue;
+    if(n.x<0||n.x>=COLS||n.y<0||n.y>=ROWS) continue;
+    if(bodies.some(b=>b.slice(0,-1).some(s=>s.x===n.x&&s.y===n.y))) continue;
+    vis.add(k); cnt++;
+    for(const nn of nb(n)) q.push(nn);
+  }
+  return cnt;
+}
+
+function safeDir(head, body, target) {
+  const dirs=[{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+  let bestD=dirs[0], bestS=-Infinity;
+  for(const d of dirs){
+    const next={x:head.x+d.x,y:head.y+d.y};
+    if(next.x<0||next.x>=COLS||next.y<0||next.y>=ROWS) continue;
+    if(body.slice(0,-1).some(s=>s.x===next.x&&s.y===next.y)) continue;
+    const space=floodFill(next,[body]);
+    let sc=space*10; if(target) sc-=h(next,target);
+    if(sc>bestS){bestS=sc;bestD=d;}
+  }
+  return bestD;
+}
+
+function aiDir(body, extra=[]) {
+  const head=body[0];
+  let path=astar(head, food, [body,...extra]);
+  if(!path&&bonusFood) path=astar(head, bonusFood, [body,...extra]);
+  if(path&&path.length){
+    const next=path[0], nb=[{...next},...body.slice(0,-1)];
+    if(floodFill(next,[nb])>=body.length) return {x:next.x-head.x,y:next.y-head.y};
+  }
+  return safeDir(head, body, food);
+}
+
+// ===== PARTICLES =====
+function addParticles(x,y,color,count=8) {
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2, sp=Math.random()*3+1;
+    particles.push({
+      x:x*G+G/2, y:y*G+G/2,
+      vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      life:1, color, size:Math.random()*4+2
+    });
+  }
+}
+
+function updateParticles() {
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.life-=0.03; p.size*=0.97;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+function drawParticles() {
+  for(const p of particles){
+    X.globalAlpha=p.life; X.fillStyle=p.color;
+    X.beginPath(); X.arc(p.x,p.y,p.size,0,Math.PI*2); X.fill();
+  }
+  X.globalAlpha=1;
+}
+
+// ===== STARS BG =====
+const stars=Array.from({length:60},()=>({x:Math.random()*400,y:Math.random()*400,s:Math.random()*1.5+0.5,b:Math.random()}));
+function drawStars(){
+  const t=Date.now()/1000;
+  for(const s of stars){
+    const a=0.3+0.3*Math.sin(t*2+s.b*10);
+    X.fillStyle=`rgba(255,255,255,${a})`;
+    X.beginPath(); X.arc(s.x,s.y,s.s,0,Math.PI*2); X.fill();
+  }
+}
+
+// ===== DRAW =====
+function draw(){
+  X.clearRect(0,0,C.width,C.height);
+  drawStars();
+
+  // Grid
+  X.fillStyle='rgba(255,255,255,0.02)';
+  for(let x=0;x<COLS;x++) for(let y=0;y<ROWS;y++) X.fillRect(x*G+9,y*G+9,2,2);
+
+  const showP = mode!=='ai', showA = mode==='ai'||mode==='versus';
+
+  // AI path visualization
+  if(showPath && showA && started){
+    const path=astar(aiSnake[0],food,[aiSnake]);
+    if(path){
+      X.strokeStyle='rgba(0,212,255,0.2)'; X.lineWidth=G*0.6; X.lineCap='round';
+      X.beginPath(); X.moveTo(aiSnake[0].x*G+G/2,aiSnake[0].y*G+G/2);
+      for(const p of path) X.lineTo(p.x*G+G/2,p.y*G+G/2);
+      X.stroke();
+    }
+  }
+  // Coach path
+  if(mode==='coach'&&started){
+    const path=astar(snake[0],food,[snake]);
+    if(path){
+      X.strokeStyle='rgba(0,255,136,0.15)'; X.lineWidth=G*0.6; X.lineCap='round';
+      X.beginPath(); X.moveTo(snake[0].x*G+G/2,snake[0].y*G+G/2);
+      for(const p of path) X.lineTo(p.x*G+G/2,p.y*G+G/2);
+      X.stroke();
+    }
+  }
+
+  // Player snake
+  if(showP) drawSnake(snake, [160,80,50], '#00ff88');
+  // AI snake
+  if(showA) drawSnake(aiSnake, [200,90,50], '#00d4ff', 'AI');
+
+  // Food
+  drawFood(food, '#e94560', 15);
+  if(bonusFood) drawFood(bonusFood, '#ffd700', 20, '⭐');
+
+  // Particles
+  updateParticles();
+  drawParticles();
+
+  // Challenge timer bar
+  if(mode==='challenge'&&started){
+    const pct = challengeTime/60;
+    X.fillStyle='rgba(0,0,0,0.3)'; X.fillRect(0,C.height-6,C.width,6);
+    X.fillStyle = pct>0.3?'#00ff88':pct>0.1?'#ffd700':'#e94560';
+    X.fillRect(0,C.height-6,C.width*pct,6);
+  }
+}
+
+function drawSnake(body, hueBase, glow, label){
+  for(let i=0;i<body.length;i++){
+    const ratio=1-i/body.length;
+    X.fillStyle=`hsl(${hueBase[0]+ratio*hueBase[1]},${hueBase[2]}%,${35+ratio*30}%)`;
+    X.shadowColor=glow; X.shadowBlur=i===0?15:5;
+    const x=body[i].x*G+1, y=body[i].y*G+1, w=G-2, h2=G-2, r=5;
+    X.beginPath(); X.moveTo(x+r,y);
+    X.arcTo(x+w,y,x+w,y+h2,r); X.arcTo(x+w,y+h2,x,y+h2,r);
+    X.arcTo(x,y+h2,x,y,r); X.arcTo(x,y,x+w,y,r); X.fill();
+    X.shadowBlur=0;
+    // Eyes on head
+    if(i===0){
+      X.fillStyle='#fff';
+      const ex=body[0].x*G+G/2, ey=body[0].y*G+G/2;
+      X.beginPath(); X.arc(ex-4,ey-2,2.5,0,Math.PI*2); X.arc(ex+4,ey-2,2.5,0,Math.PI*2); X.fill();
+      X.fillStyle='#111';
+      X.beginPath(); X.arc(ex-4,ey-2,1.2,0,Math.PI*2); X.arc(ex+4,ey-2,1.2,0,Math.PI*2); X.fill();
+    }
+  }
+  if(label){
+    X.fillStyle='rgba(255,255,255,0.8)'; X.font='bold 10px monospace'; X.textAlign='center';
+    X.fillText(label, body[0].x*G+G/2, body[0].y*G-3);
+  }
+}
+
+function drawFood(pos, color, glow, emoji){
+  X.shadowColor=color; X.shadowBlur=glow;
+  if(emoji){
+    X.font='16px serif'; X.textAlign='center'; X.textBaseline='middle';
+    X.fillText(emoji, pos.x*G+G/2, pos.y*G+G/2);
+  } else {
+    X.fillStyle=color; X.beginPath();
+    X.arc(pos.x*G+G/2, pos.y*G+G/2, G/2-3, 0, Math.PI*2); X.fill();
+  }
+  X.shadowBlur=0;
+}
+
+// ===== GAME LOGIC =====
+function move(body,d){
+  const head={x:body[0].x+d.x,y:body[0].y+d.y};
+  return {head, body:[head,...body.slice(0,-1)]};
+}
+function hit(head,body,other){
+  if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS) return true;
+  if(body.slice(1).some(s=>s.x===head.x&&s.y===head.y)) return true;
+  if(other&&other.some(s=>s.x===head.x&&s.y===head.y)) return true;
+  return false;
+}
+
+function update(){
+  if(paused) return;
+  steps++;
+
+  const showP=mode!=='ai', showA=mode==='ai'||mode==='versus';
+
+  // Player
+  if(showP){
+    dir={...nextDir};
+    const r=move(snake,dir);
+    if(hit(r.head,r.body,showA?aiSnake:null)) return endGame('你');
+    snake=r.body;
+    checkFood(snake,'p');
+  }
+
+  // AI
+  if(showA){
+    aiDir=aiDir(aiSnake,showP?[snake]:[]);
+    const r=move(aiSnake,aiDir);
+    if(hit(r.head,r.body,showP?snake:null)){
+      if(mode==='ai') return endGame('AI');
+      aiSnake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}]; aiDir={x:1,y:0};
+    } else {
+      aiSnake=r.body;
+      checkFood(aiSnake,'a');
+    }
+  }
+
+  // Coach hint
+  if(mode==='coach'){
+    const bestD=aiDir(snake);
+    const dirs=[{x:0,y:-1,l:'↑'},{x:0,y:1,l:'↓'},{x:-1,y:0,l:'←'},{x:1,y:0,l:'→'}];
+    const b=dirs.find(d=>d.x===bestD.x&&d.y===bestD.y);
+    const c=dirs.find(d=>d.x===dir.x&&d.y===dir.y);
+    const good=b&&c&&b.l===c.l;
+    $('ai-hint').innerHTML=`💡 AI建议: <b style="color:${good?'#00ff88':'#e94560'}">${b?b.l:'?'}</b> ${good?'✅ 走得好！':'⚠️ 换方向'}`;
+  }
+
+  // Challenge timer
+  if(mode==='challenge'&&steps%10===0){
+    const elapsed=Math.floor((Date.now()-timerStart)/1000);
+    challengeTime=60-elapsed;
+    $('timer').textContent=challengeTime+'s';
+    if(challengeTime<=0) return endGame('时间到');
+  }
+
+  draw();
+}
+
+function checkFood(body,who){
+  const head=body[0];
+  let ate=false, pts=10;
+  if(head.x===food.x&&head.y===food.y) ate=true;
+  else if(bonusFood&&head.x===bonusFood.x&&head.y===bonusFood.y){ate=true;pts=30;bonusFood=null;}
+
+  if(ate){
+    body.push({...body[body.length-1]});
+    addParticles(head.x,head.y,who==='p'?'#00ff88':'#00d4ff',12);
+    if(who==='p'){pScore+=pts;$('p-score').textContent=pScore;}
+    else{aScore+=pts;$('a-score').textContent=aScore;}
+    food=spawn();
+    // Bonus food chance
+    if(!bonusFood&&Math.random()<0.2) bonusFood=spawn();
+    if(who==='p'&&pScore>best){best=pScore;$('best').textContent=best;}
+    // Speed up
+    if(speed>50){speed-=1;clearInterval(gameLoop);gameLoop=setInterval(update,speed);}
+  }
+}
+
+function endGame(who){
+  clearInterval(gameLoop); started=false; gameOverFlag=true; draw();
+  const ol=$('overlay'); ol.classList.remove('hidden');
+  $('ol-title').innerHTML=`💀 ${who} 挂了！`;
+  $('ol-desc').textContent=`你:${pScore}  AI:${aScore}  步数:${steps}`;
+  $('action-btn').textContent='🔄 再来一局';
+}
+
+function togglePause(){
+  paused=!paused;
+  const ol=$('overlay');
+  if(paused){ol.classList.remove('hidden');$('ol-title').textContent='⏸ 暂停';$('ol-desc').textContent='';$('action-btn').textContent='▶️ 继续';}
+  else ol.classList.add('hidden');
+}
+
+function stopGame(){
+  clearInterval(gameLoop); started=false; draw();
+}
+
+let gameLoop;
+function startGame(){
+  init(); started=true;
+  $('overlay').classList.add('hidden');
+  speed = mode==='ai'?60:mode==='versus'?100:mode==='challenge'?110:120;
+  timerStart=Date.now();
+  if(mode==='challenge'){challengeTime=60;$('timer').textContent='60s';}
+  gameLoop=setInterval(update,speed);
+}
+
+function setDir(x,y){
+  if(dir.x+x===0&&dir.y+y===0) return;
+  nextDir={x,y};
+}
+
+// ===== INPUT =====
+document.addEventListener('keydown',e=>{
+  if(!started&&!gameOverFlag&&(e.key==='Enter'||e.key===' ')){startGame();return;}
+  switch(e.key){
+    case'ArrowUp':case'w':case'W':setDir(0,-1);break;
+    case'ArrowDown':case's':case'S':setDir(0,1);break;
+    case'ArrowLeft':case'a':case'A':setDir(-1,0);break;
+    case'ArrowRight':case'd':case'D':setDir(1,0);break;
+    case' ':if(started)togglePause();break;
+    case'r':case'R':if(started){clearInterval(gameLoop);startGame();}break;
+    case'v':case'V':showPath=!showPath;draw();break;
+  }e.preventDefault();
+});
+
+init();
+</script>
+</body>
+</html>
